@@ -1170,7 +1170,7 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
         <span class="theme-switch-track"><span class="theme-switch-thumb"></span></span>
       </button>
       <button class="!w-10 !h-10 !min-h-0 !p-0 !rounded-full bg-bgcream border border-bordertan text-base" onclick="showToast('No new notifications.')">🔔</button>
-      <div class="flex items-center gap-3 cursor-pointer" onclick="document.getElementById('toggleConfig').click(); scrollToSection('settings');">
+      <div class="flex items-center gap-3 cursor-pointer" onclick="openSettingsPage();">
         <div class="w-10 h-10 rounded-full bg-navy text-gold font-heading font-bold flex items-center justify-center text-sm" id="headerAdvisorAvatar">--</div>
         <div>
           <div class="text-sm font-semibold text-ink leading-tight" id="headerAdvisorName">Your Name</div>
@@ -1627,6 +1627,10 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
         <label for="broadcastSubject">Subject</label>
         <input type="text" id="broadcastSubject" placeholder="e.g. A quick update from your advisor">
 
+        <label for="broadcastSenderEmail" style="margin-top:12px;">Sender email <span style="font-size:10.5px;color:#9CA3AF;font-weight:600;text-transform:none;letter-spacing:0;">(optional — overrides your default Contact Email for this broadcast only)</span></label>
+        <input type="text" id="broadcastSenderEmail" placeholder="Leave blank to use your default Contact Email from Settings">
+        <div style="font-size:11px;color:#9CA3AF;margin-top:6px;">Only works if this address is a verified "Send mail as" alias in the Gmail account this app is deployed under — otherwise it silently falls back to your default sender, same as the Settings Contact Email field.</div>
+
         <label style="margin-top:12px;">Message</label>
         <div id="broadcastToolbar" style="display:flex; gap:4px; flex-wrap:wrap; margin:6px 0 8px; padding:8px; background:var(--cream,#FDF8F0); border:1px solid var(--line,#E4DCC8); border-radius:8px 8px 0 0;">
           <button type="button" class="bc-tool-btn" data-cmd="bold" title="Bold" style="font-weight:800;">B</button>
@@ -1644,6 +1648,16 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
              data-placeholder="Hi {FirstName},&#10;&#10;Write your message here...">
         </div>
         <div style="font-size:11px; color:#9CA3AF; margin-top:6px;">Tip: click an inserted image to select it, then use the resize handle that appears in its corner to make it bigger or smaller. Hover an image to reveal a small × button to remove it.</div>
+
+        <div id="bcTemplateToggleWrap" style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:16px; background:var(--cream,#FDF8F0); border:1px solid var(--line,#E4DCC8); border-radius:10px; padding:12px 14px;">
+          <div style="flex:1 1 auto; min-width:0;">
+            <div style="font-size:13px; font-weight:700; color:var(--ink,#13202B);">Use header & footer template</div>
+            <div id="bcTemplateStatusText" style="font-size:11px; color:#9CA3AF; margin-top:2px;">Wraps your message with the same header/footer photos from your Branding Studio.</div>
+          </div>
+          <button type="button" class="theme-switch" id="bcTemplateToggle" style="flex:0 0 auto;">
+            <span class="theme-switch-track"><span class="theme-switch-thumb"></span></span>
+          </button>
+        </div>
         <input type="file" id="bcImageFileInput" accept="image/*" style="display:none;">
 
         <label style="margin-top:16px;">Attachments (optional)</label>
@@ -2147,6 +2161,10 @@ function showPage(pageName){
   document.getElementById('page-birthday').style.display = (pageName === 'birthday') ? '' : 'none';
   document.getElementById('page-clients').style.display = (pageName === 'clients') ? '' : 'none';
   document.getElementById('page-broadcast').style.display = (pageName === 'broadcast') ? '' : 'none';
+  // Settings isn't one of the switchable pages, but it must never sit
+  // visible underneath another page (e.g. Broadcast Email) — hide it
+  // any time a real page is explicitly shown.
+  document.getElementById('settingsSection').style.display = 'none';
 
   const titles = pageName === 'birthday'
     ? { line1: 'Client Birthday', line2: 'Greetings', full: 'Client Birthday Greetings' }
@@ -2160,6 +2178,24 @@ function showPage(pageName){
   document.getElementById('mobileTitleLine1').textContent = titles.line1;
   document.getElementById('mobileTitleLine2').textContent = titles.line2;
   document.getElementById('desktopTitle').textContent = titles.full;
+}
+
+// Settings isn't part of the page-X switching system (its cards toggle
+// individually via #toggleConfig), but it must never sit visible at
+// the same time as another page like Broadcast Email. This hides every
+// page-X container, shows settingsSection, opens its cards, and scrolls
+// to it — used by every entry point that opens Settings (sidebar link,
+// profile avatar, mobile nav) so they all behave identically.
+function openSettingsPage(){
+  document.getElementById('page-dues').style.display = 'none';
+  document.getElementById('page-birthday').style.display = 'none';
+  document.getElementById('page-clients').style.display = 'none';
+  document.getElementById('page-broadcast').style.display = 'none';
+  document.getElementById('settingsSection').style.display = '';
+  document.querySelectorAll('.sidebar-link, .mobile-nav-item').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('[data-nav="settings"]').forEach(el => el.classList.add('active'));
+  document.getElementById('toggleConfig').click();
+  scrollToSection('settings');
 }
 
 function scrollToSection(name){
@@ -2226,8 +2262,7 @@ document.querySelectorAll('.sidebar-link[data-nav]').forEach(link => {
       return;
     }
     if (nav === 'settings'){
-      document.getElementById('toggleConfig').click();
-      scrollToSection('settings');
+      openSettingsPage();
       return;
     }
     scrollToSection(nav);
@@ -3314,13 +3349,63 @@ function closeBcPicker(){
 el('bcPickerCloseBtn').addEventListener('click', closeBcPicker);
 el('bcPickerDoneBtn').addEventListener('click', closeBcPicker);
 
-el('bcPreviewBtn').addEventListener('click', () => {
+/* ============================================================
+   HEADER/FOOTER TEMPLATE — reuses the exact header and footer
+   photos already saved in Branding Studio (same Drive files
+   used by dues reminders and birthday greetings), so a
+   broadcast can look like a normal branded email instead of a
+   plain message. Purely a send-time wrapper \u2014 doesn't touch
+   the editor content itself.
+   ============================================================ */
+let bcUseTemplate = false;
+
+el('bcTemplateToggle').addEventListener('click', async () => {
+  bcUseTemplate = !bcUseTemplate;
+  const track = el('bcTemplateToggle').querySelector('.theme-switch-track');
+  track.classList.toggle('is-on', bcUseTemplate);
+
+  if (!bcUseTemplate){
+    el('bcTemplateStatusText').textContent = 'Wraps your message with the same header/footer photos from your Branding Studio.';
+    return;
+  }
+  el('bcTemplateStatusText').textContent = 'Checking your saved header/footer photos\u2026';
+  const [headerImg, footerImg] = await Promise.all([ensurePreviewImage('header'), ensurePreviewImage('footer')]);
+  if (!headerImg || !footerImg){
+    bcUseTemplate = false;
+    track.classList.remove('is-on');
+    el('bcTemplateStatusText').textContent = 'No header/footer photos saved yet \u2014 add them in Settings \u2192 Branding Studio first.';
+    return;
+  }
+  el('bcTemplateStatusText').textContent = 'On \u2014 your saved header and footer will wrap this message.';
+});
+
+// Wraps the (already-stripped) message HTML with the advisor's actual
+// header/footer images when the template toggle is on. Images are
+// embedded as data URLs here for preview; the real send still goes
+// through Code.gs which uses cid: + inlineImages the same way dues
+// reminders and birthday greetings already do, for full email-client
+// compatibility (data URLs render fine in-browser but are unreliable
+// in real inboxes, so the two paths intentionally differ).
+async function wrapBodyForPreview(bodyHtml){
+  if (!bcUseTemplate) return bodyHtml;
+  const [headerImg, footerImg] = await Promise.all([ensurePreviewImage('header'), ensurePreviewImage('footer')]);
+  if (!headerImg || !footerImg) return bodyHtml;
+  return ''
+    + '<div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;border:1px solid #E7DFCF;border-radius:10px;overflow:hidden;">'
+    + '<img src="' + headerImg + '" alt="Header" style="width:100%;display:block;">'
+    + '<div style="padding:24px;background:#FDF8F0;color:#1C2A38;">' + bodyHtml + '</div>'
+    + '<img src="' + footerImg + '" alt="Footer" style="width:100%;display:block;">'
+    + '</div>';
+}
+
+el('bcPreviewBtn').addEventListener('click', async () => {
   const subject = el('broadcastSubject').value.trim();
-  const body = stripEditorControls(el('broadcastEditor').innerHTML.trim());
-  if (!body){
+  const rawBody = stripEditorControls(el('broadcastEditor').innerHTML.trim());
+  if (!rawBody){
     showStatus('broadcastStatus','error','Write a message first.');
     return;
   }
+  const body = await wrapBodyForPreview(rawBody);
   const previewBody = body.split('{FirstName}').join('Juan Miguel');
   el('bcPreviewBody').innerHTML =
     (subject ? '<div style="font-size:12px;color:#9CA3AF;margin-bottom:10px;">Subject: <strong style="color:var(--ink,#13202B);">' + escapeHtml(subject) + '</strong></div>' : '') +
@@ -3332,6 +3417,7 @@ el('bcPreviewBtn').addEventListener('click', () => {
 el('bcSendBtn').addEventListener('click', async () => {
   const subject = el('broadcastSubject').value.trim();
   const body = stripEditorControls(el('broadcastEditor').innerHTML.trim());
+  const senderEmail = el('broadcastSenderEmail').value.trim();
   if (!subject){
     showStatus('broadcastStatus','error','Please add a subject line.');
     return;
@@ -3349,17 +3435,18 @@ el('bcSendBtn').addEventListener('click', async () => {
   el('bcConfirmCount').textContent =
     'This will send to ' + recipients.length + ' selected client' + (recipients.length === 1 ? '' : 's') +
     ', personalized with each client\u2019s first name' +
+    (senderEmail ? ', from ' + senderEmail : '') +
     (bcAttachments.length ? ', with ' + bcAttachments.length + ' attachment' + (bcAttachments.length === 1 ? '' : 's') + '.' : '.');
   el('bcConfirmOverlay').style.display = 'flex';
 
   el('bcConfirmCancel').onclick = () => { el('bcConfirmOverlay').style.display = 'none'; };
   el('bcConfirmSend').onclick = async () => {
     el('bcConfirmOverlay').style.display = 'none';
-    await runBroadcastSend(recipients, subject, body);
+    await runBroadcastSend(recipients, subject, body, senderEmail, bcUseTemplate);
   };
 });
 
-async function runBroadcastSend(recipients, subject, body){
+async function runBroadcastSend(recipients, subject, body, senderEmail, useTemplate){
   el('bcSendBtn').disabled = true;
   el('bcPreviewBtn').disabled = true;
   const rows = recipients.map(c => ({ email: c.email, clientName: c.clientName }));
@@ -3370,6 +3457,7 @@ async function runBroadcastSend(recipients, subject, body){
   const batchSize = 25;
   const batches = chunkArray(rows, batchSize);
   let totalSent = 0, totalFailed = 0;
+  const allFailureReasons = [];
 
   try{
     for (let i = 0; i < batches.length; i++){
@@ -3381,18 +3469,31 @@ async function runBroadcastSend(recipients, subject, body){
         rows: batches[i],
         subject: subject,
         htmlBody: body,
-        attachments: bcAttachments
+        attachments: bcAttachments,
+        senderEmail: senderEmail || undefined,
+        useTemplate: !!useTemplate
       });
       if (!result.success){
         throw new Error(result.error || 'Unknown error from server');
       }
       totalSent += result.sent || 0;
       totalFailed += result.failed || 0;
+      if (result.failureReasons) allFailureReasons.push(...result.failureReasons);
     }
-    showStatus('broadcastStatus','success',
-      'Done \u2014 sent to ' + totalSent + ' of ' + rows.length + ' clients' +
-      (totalFailed > 0 ? ' (' + totalFailed + ' failed \u2014 check their email addresses).' : '.')
-    );
+    let msg = 'Done \u2014 sent to ' + totalSent + ' of ' + rows.length + ' clients';
+    if (totalFailed > 0){
+      // Show up to 3 concrete reasons instead of a generic "check their
+      // email addresses" \u2014 the real cause (bad address, attachment too
+      // large, blocked recipient, etc.) is now visible immediately.
+      const sample = allFailureReasons.slice(0, 3)
+        .map(f => '\u2022 ' + f.email + ': ' + f.reason)
+        .join('  ');
+      msg += ' (' + totalFailed + ' failed). ' + sample;
+      if (allFailureReasons.length > 3) msg += '  \u2026and ' + (allFailureReasons.length - 3) + ' more.';
+    } else {
+      msg += '.';
+    }
+    showStatus('broadcastStatus', totalFailed > 0 ? 'error' : 'success', msg);
   }catch(err){
     showStatus('broadcastStatus','error',
       'Stopped after ' + totalSent + ' of ' + rows.length + ' sent (already delivered \u2014 safe to retry, but it will resend to everyone in this selection since broadcasts don\u2019t track who already got it). Error: ' + err.message
