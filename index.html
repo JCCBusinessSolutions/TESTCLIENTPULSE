@@ -2998,12 +2998,13 @@ el('bcImageFileInput').addEventListener('change', async (e) => {
   }
   try{
     // Phone camera photos are often 3-10MB, which becomes even larger
-    // once base64-encoded inline into the email HTML — Gmail rejects
-    // sends once the total body size passes its limit ("Nalagpasan ang
-    // Limitasyon: Laki ng Body ng E-mail"). Resizing to a sensible
-    // inline-image width before insertion keeps broadcasts reliably
-    // under that limit, same fix already used for header/footer photos.
-    const resized = await resizeImageForUpload(file, 900, 0.82);
+    // once base64-encoded inline into the email HTML. A fixed 900px/82%
+    // pass could still be large for busy/detailed photos, so this
+    // enforces a real 400KB ceiling (inline body images can afford to
+    // be a bit larger than header/footer since there's usually only
+    // one or two per message), retrying at lower quality/size until
+    // actually met.
+    const resized = await resizeImageForUpload(file, 900, 0.82, 400 * 1024);
     el('broadcastEditor').focus();
     insertResizableImage('data:' + resized.mimeType + ';base64,' + resized.base64);
   }catch(err){
@@ -3565,32 +3566,67 @@ el('sendHourSelect').addEventListener('change', async () => {
 // photos are often 3-10MB, which can fail to upload reliably (especially
 // on mobile data) — shrinking to a sensible email width fixes this and
 // also makes the resulting emails load faster for clients.
-function resizeImageForUpload(file, maxWidth, quality){
+//
+// maxBytes enforces a real, guaranteed ceiling instead of hoping one
+// fixed width/quality pass happens to be small enough: some photos
+// (busy backgrounds, high detail) stay large even at 80% JPEG quality,
+// which is exactly what caused broadcasts to keep exceeding Gmail's
+// body size limit even after a first compression pass. This retries
+// with lower quality, and if quality alone isn't enough, also shrinks
+// the dimensions, until the actual output is under the target — or
+// until further shrinking stops helping, whichever comes first.
+function resizeImageForUpload(file, maxWidth, quality, maxBytes){
   maxWidth = maxWidth || 1600;
   quality = quality || 0.90;
+  maxBytes = maxBytes || Infinity; // no hard cap unless the caller asks for one
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       const img = new Image();
       img.onload = () => {
-        let width = img.width, height = img.height;
-        if (width > maxWidth){
-          height = Math.round(height * (maxWidth / width));
-          width = maxWidth;
+        function renderAt(width, q){
+          const height = Math.round(img.height * (width / img.width));
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+          return new Promise((res, rej) => {
+            canvas.toBlob((blob) => {
+              if (!blob){ rej(new Error('Could not process that image.')); return; }
+              res(blob);
+            }, 'image/jpeg', q);
+          });
         }
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-        canvas.toBlob((blob) => {
-          if (!blob){ reject(new Error('Could not process that image.')); return; }
-          const outReader = new FileReader();
-          outReader.onload = () => {
-            resolve({ base64: outReader.result.split(',')[1], mimeType: blob.type || 'image/jpeg' });
-          };
-          outReader.onerror = () => reject(new Error('Could not read processed image.'));
-          outReader.readAsDataURL(blob);
-        }, 'image/jpeg', quality);
+
+        (async () => {
+          try{
+            let width = Math.min(img.width, maxWidth);
+            let q = quality;
+            let blob = await renderAt(width, q);
+
+            // Quality passes first (cheap, preserves more detail than
+            // shrinking dimensions) — down to a sensible floor.
+            while (blob.size > maxBytes && q > 0.4){
+              q -= 0.15;
+              blob = await renderAt(width, q);
+            }
+            // If quality alone isn't enough, start shrinking dimensions
+            // too, down to a floor that's still usable as an email banner.
+            while (blob.size > maxBytes && width > 400){
+              width = Math.round(width * 0.8);
+              blob = await renderAt(width, Math.max(q, 0.6));
+            }
+
+            const outReader = new FileReader();
+            outReader.onload = () => {
+              resolve({ base64: outReader.result.split(',')[1], mimeType: blob.type || 'image/jpeg' });
+            };
+            outReader.onerror = () => reject(new Error('Could not read processed image.'));
+            outReader.readAsDataURL(blob);
+          }catch(err){
+            reject(err);
+          }
+        })();
       };
       img.onerror = () => reject(new Error('Could not open that file as an image.'));
       img.src = e.target.result;
@@ -3613,11 +3649,12 @@ async function handlePhotoUpload(target, file){
     // Header/footer banners are embedded in EVERY email sent (dues
     // reminders, birthday greetings, and now template-wrapped
     // broadcasts) and are displayed at ~480px wide inside the email
-    // template — 1600px/90% quality (the general-purpose default) is
-    // needlessly large for that and was a real contributor to broadcasts
-    // exceeding Gmail's body size limit. 800px/80% is still sharp at
-    // actual email display size and meaningfully smaller.
-    const { base64, mimeType } = await resizeImageForUpload(file, 800, 0.80);
+    // template. A fixed 800px/80% pass could still come out large for
+    // busy/detailed photos, which is exactly what kept causing broadcasts
+    // to exceed Gmail's body size limit — so this now enforces a real
+    // 250KB ceiling, retrying at lower quality/size until it's actually
+    // met, not just hoping one compression pass is small enough.
+    const { base64, mimeType } = await resizeImageForUpload(file, 800, 0.80, 250 * 1024);
     el(statusId).textContent = 'Uploading\u2026';
     previewImageCache[target] = 'data:' + mimeType + ';base64,' + base64;
     await callBackend({ action:'uploadImage', target: target, base64: base64, mimeType: mimeType });
