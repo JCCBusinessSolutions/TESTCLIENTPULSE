@@ -62,6 +62,23 @@
     --bad:#EB5757;
   }
   *{box-sizing:border-box;}
+
+  /* Hardcoded fallback for the mobile header bar — this is normally
+     positioned by Tailwind's `sticky top-0 z-30` utility classes, but
+     those only exist if the Tailwind CDN script (cdn.tailwindcss.com)
+     successfully loads. On a slow/unreliable connection, or if the CDN
+     is blocked by a firewall, Tailwind silently never initializes and
+     every utility class does nothing — the header then falls back to
+     plain document flow (position:static), so it scrolls away instead
+     of staying fixed, and the Setup button ends up wherever the header
+     happens to land on the page instead of always being reachable at
+     the top. This rule guarantees correct positioning regardless of
+     whether the CDN loads, since it doesn't depend on Tailwind at all. */
+  #mobileHeaderBar{
+    position: sticky;
+    top: 0;
+    z-index: 30;
+  }
   body{
     margin:0;
     background:var(--cream);
