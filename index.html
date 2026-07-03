@@ -1627,10 +1627,6 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
         <label for="broadcastSubject">Subject</label>
         <input type="text" id="broadcastSubject" placeholder="e.g. A quick update from your advisor">
 
-        <label for="broadcastSenderEmail" style="margin-top:12px;">Sender email <span style="font-size:10.5px;color:#9CA3AF;font-weight:600;text-transform:none;letter-spacing:0;">(optional — overrides your default Contact Email for this broadcast only)</span></label>
-        <input type="text" id="broadcastSenderEmail" placeholder="Leave blank to use your default Contact Email from Settings">
-        <div style="font-size:11px;color:#9CA3AF;margin-top:6px;">Only works if this address is a verified "Send mail as" alias in the Gmail account this app is deployed under — otherwise it silently falls back to your default sender, same as the Settings Contact Email field.</div>
-
         <label style="margin-top:12px;">Message</label>
         <div id="broadcastToolbar" style="display:flex; gap:4px; flex-wrap:wrap; margin:6px 0 8px; padding:8px; background:var(--cream,#FDF8F0); border:1px solid var(--line,#E4DCC8); border-radius:8px 8px 0 0;">
           <button type="button" class="bc-tool-btn" data-cmd="bold" title="Bold" style="font-weight:800;">B</button>
@@ -3001,9 +2997,15 @@ el('bcImageFileInput').addEventListener('change', async (e) => {
     return;
   }
   try{
-    const base64 = await fileToBase64(file);
+    // Phone camera photos are often 3-10MB, which becomes even larger
+    // once base64-encoded inline into the email HTML — Gmail rejects
+    // sends once the total body size passes its limit ("Nalagpasan ang
+    // Limitasyon: Laki ng Body ng E-mail"). Resizing to a sensible
+    // inline-image width before insertion keeps broadcasts reliably
+    // under that limit, same fix already used for header/footer photos.
+    const resized = await resizeImageForUpload(file, 900, 0.82);
     el('broadcastEditor').focus();
-    insertResizableImage('data:' + file.type + ';base64,' + base64);
+    insertResizableImage('data:' + resized.mimeType + ';base64,' + resized.base64);
   }catch(err){
     showStatus('broadcastStatus','error','Could not insert image: ' + err.message);
   }
@@ -3406,7 +3408,10 @@ el('bcPreviewBtn').addEventListener('click', async () => {
     return;
   }
   const body = await wrapBodyForPreview(rawBody);
-  const previewBody = body.split('{FirstName}').join('Juan Miguel');
+  // Matches the actual sent email exactly \u2014 bold black, same as
+  // Code.gs applies at send time \u2014 so the preview isn't misleading.
+  const styledFirstName = '<span style="font-weight:700;color:#000000;">Juan Miguel</span>';
+  const previewBody = body.split('{FirstName}').join(styledFirstName);
   el('bcPreviewBody').innerHTML =
     (subject ? '<div style="font-size:12px;color:#9CA3AF;margin-bottom:10px;">Subject: <strong style="color:var(--ink,#13202B);">' + escapeHtml(subject) + '</strong></div>' : '') +
     previewBody;
@@ -3417,7 +3422,6 @@ el('bcPreviewBtn').addEventListener('click', async () => {
 el('bcSendBtn').addEventListener('click', async () => {
   const subject = el('broadcastSubject').value.trim();
   const body = stripEditorControls(el('broadcastEditor').innerHTML.trim());
-  const senderEmail = el('broadcastSenderEmail').value.trim();
   if (!subject){
     showStatus('broadcastStatus','error','Please add a subject line.');
     return;
@@ -3430,23 +3434,40 @@ el('bcSendBtn').addEventListener('click', async () => {
     showStatus('broadcastStatus','error','Tap "CHOOSE RECIPIENTS" and select at least one client first.');
     return;
   }
+
+  // Gmail rejects sends once the total message size (body + inline
+  // images + attachments, all base64-encoded) passes its limit. Warn
+  // before sending rather than letting every recipient fail silently —
+  // base64 runs about 4/3 the size of the original bytes, so this is
+  // an estimate, not exact, but catches the common case (one oversized
+  // photo) before it wastes a send attempt.
+  const bodyBytes = new Blob([body]).size;
+  const attachmentBytes = bcAttachments.reduce((sum, a) => sum + Math.ceil((a.base64 || '').length * 0.75), 0);
+  const estimatedTotalMB = (bodyBytes + attachmentBytes) / (1024 * 1024);
+  if (estimatedTotalMB > 20){
+    showStatus('broadcastStatus','error',
+      'This message is too large (~' + estimatedTotalMB.toFixed(1) + 'MB) and will likely fail to send. ' +
+      'Try removing an inline image or attachment, or use fewer/smaller photos.'
+    );
+    return;
+  }
+
   const recipients = bcAllClients.filter(c => bcSelectedEmails.has(c.email));
 
   el('bcConfirmCount').textContent =
     'This will send to ' + recipients.length + ' selected client' + (recipients.length === 1 ? '' : 's') +
     ', personalized with each client\u2019s first name' +
-    (senderEmail ? ', from ' + senderEmail : '') +
     (bcAttachments.length ? ', with ' + bcAttachments.length + ' attachment' + (bcAttachments.length === 1 ? '' : 's') + '.' : '.');
   el('bcConfirmOverlay').style.display = 'flex';
 
   el('bcConfirmCancel').onclick = () => { el('bcConfirmOverlay').style.display = 'none'; };
   el('bcConfirmSend').onclick = async () => {
     el('bcConfirmOverlay').style.display = 'none';
-    await runBroadcastSend(recipients, subject, body, senderEmail, bcUseTemplate);
+    await runBroadcastSend(recipients, subject, body, bcUseTemplate);
   };
 });
 
-async function runBroadcastSend(recipients, subject, body, senderEmail, useTemplate){
+async function runBroadcastSend(recipients, subject, body, useTemplate){
   el('bcSendBtn').disabled = true;
   el('bcPreviewBtn').disabled = true;
   const rows = recipients.map(c => ({ email: c.email, clientName: c.clientName }));
@@ -3470,7 +3491,6 @@ async function runBroadcastSend(recipients, subject, body, senderEmail, useTempl
         subject: subject,
         htmlBody: body,
         attachments: bcAttachments,
-        senderEmail: senderEmail || undefined,
         useTemplate: !!useTemplate
       });
       if (!result.success){
