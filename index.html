@@ -1645,8 +1645,7 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
         </div>
         <div id="broadcastEditor" contenteditable="true"
              style="min-height:420px; max-height:640px; overflow-y:auto; background:#fff; border:1px solid var(--line,#E4DCC8); border-top:none; border-radius:0 0 8px 8px; padding:14px 16px; font-size:14px; line-height:1.6; color:var(--ink,#13202B);"
-             data-placeholder="Hi {FirstName},&#10;&#10;Write your message here...">
-        </div>
+             data-placeholder="Hi {FirstName},&#10;&#10;Write your message here...">Hi {FirstName},<br><br></div>
         <div style="font-size:11px; color:#9CA3AF; margin-top:6px;">Tip: click an inserted image to select it, then use the resize handle that appears in its corner to make it bigger or smaller. Hover an image to reveal a small × button to remove it.</div>
 
         <div id="bcTemplateToggleWrap" style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:16px; background:var(--cream,#FDF8F0); border:1px solid var(--line,#E4DCC8); border-radius:10px; padding:12px 14px;">
@@ -3382,6 +3381,7 @@ el('bcTemplateToggle').addEventListener('click', async () => {
 
   if (!bcUseTemplate){
     el('bcTemplateStatusText').textContent = 'Wraps your message with the same header/footer photos from your Branding Studio.';
+    await updateSizeIndicator();
     return;
   }
   el('bcTemplateStatusText').textContent = 'Checking your saved header/footer photos\u2026';
@@ -3390,9 +3390,17 @@ el('bcTemplateToggle').addEventListener('click', async () => {
     bcUseTemplate = false;
     track.classList.remove('is-on');
     el('bcTemplateStatusText').textContent = 'No header/footer photos saved yet \u2014 add them in Settings \u2192 Branding Studio first.';
+    await updateSizeIndicator();
     return;
   }
   el('bcTemplateStatusText').textContent = 'On \u2014 your saved header and footer will wrap this message.';
+  // Calculated only after bcUseTemplate is fully settled and the images
+  // are already fetched/cached above \u2014 avoids the race condition where
+  // a separate fixed-delay listener could read a stale bcUseTemplate
+  // value or an empty image cache if the fetch above took longer than
+  // the delay, which is exactly what let a template-wrapped broadcast
+  // show a falsely small size and pass the pre-send check.
+  await updateSizeIndicator();
 });
 
 // Wraps the (already-stripped) message HTML with the advisor's actual
@@ -3465,9 +3473,13 @@ async function updateSizeIndicator(){
   el2.style.fontWeight = over ? '700' : '400';
 }
 
-// Recalculate whenever anything that affects size changes.
+// Recalculate whenever the editor content changes. The template
+// toggle's own click handler already calls updateSizeIndicator()
+// directly after its async header/footer check settles, so no
+// separate listener is needed here for it (a prior version used a
+// fixed-delay setTimeout for that, which raced against the actual
+// fetch time and could report a stale, falsely-small size).
 el('broadcastEditor').addEventListener('input', () => updateSizeIndicator());
-el('bcTemplateToggle').addEventListener('click', () => setTimeout(updateSizeIndicator, 400));
 
 el('bcSendBtn').addEventListener('click', async () => {
   const subject = el('broadcastSubject').value.trim();
