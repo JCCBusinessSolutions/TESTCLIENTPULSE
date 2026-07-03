@@ -1126,6 +1126,7 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
     <div class="sidebar-link" data-nav="upload"><span>📤</span>Upload &amp; Parse</div>
     <div class="sidebar-link" data-nav="reports"><span>📈</span>Reports</div>
     <div class="sidebar-link" data-nav="clients"><span>🧑‍🤝‍🧑</span>Clients</div>
+    <div class="sidebar-link" data-nav="broadcast"><span>📣</span>Broadcast Email</div>
     <div class="sidebar-link" data-nav="settings" id="sidebarSettingsLink"><span>⚙️</span>Settings<span class="dot" id="sidebarSettingsDot" style="display:none;"></span></div>
     <div class="sidebar-link" id="sidebarLogoutLink" onclick="logoutUser()" style="color:#FF8A80;"><span>🚪</span>Logout</div>
   </nav>
@@ -1613,6 +1614,120 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
     </div>
 
     <!-- ============================================================
+         BROADCAST EMAIL — its own page, separate from Settings
+         ============================================================ -->
+    <div id="page-broadcast" style="display:none;">
+
+      <div class="card" id="broadcastIntroCard">
+        <h2>📣 Broadcast Email</h2>
+        <p class="sub">Write a custom message and choose exactly who receives it. Use <strong>{FirstName}</strong> anywhere in your message and it will be replaced with each client's actual first name.</p>
+      </div>
+
+      <div class="card" id="broadcastCard">
+        <label for="broadcastSubject">Subject</label>
+        <input type="text" id="broadcastSubject" placeholder="e.g. A quick update from your advisor">
+
+        <label style="margin-top:12px;">Message</label>
+        <div id="broadcastToolbar" style="display:flex; gap:4px; flex-wrap:wrap; margin:6px 0 8px; padding:8px; background:var(--cream,#FDF8F0); border:1px solid var(--line,#E4DCC8); border-radius:8px 8px 0 0;">
+          <button type="button" class="bc-tool-btn" data-cmd="bold" title="Bold" style="font-weight:800;">B</button>
+          <button type="button" class="bc-tool-btn" data-cmd="italic" title="Italic" style="font-style:italic;">I</button>
+          <button type="button" class="bc-tool-btn" data-cmd="underline" title="Underline" style="text-decoration:underline;">U</button>
+          <span style="width:1px; background:var(--line,#E4DCC8); margin:2px 4px;"></span>
+          <button type="button" class="bc-tool-btn" id="bcInsertLinkBtn" title="Insert link">🔗 Link</button>
+          <button type="button" class="bc-tool-btn" id="bcInsertImageBtn" title="Insert image">🖼️ Image</button>
+          <span style="width:1px; background:var(--line,#E4DCC8); margin:2px 4px;"></span>
+          <button type="button" class="bc-tool-btn" data-cmd="insertUnorderedList" title="Bullet list">• List</button>
+          <button type="button" class="bc-tool-btn" id="bcClearFormatBtn" title="Clear formatting">Clear</button>
+        </div>
+        <div id="broadcastEditor" contenteditable="true"
+             style="min-height:420px; max-height:640px; overflow-y:auto; background:#fff; border:1px solid var(--line,#E4DCC8); border-top:none; border-radius:0 0 8px 8px; padding:14px 16px; font-size:14px; line-height:1.6; color:var(--ink,#13202B);"
+             data-placeholder="Hi {FirstName},&#10;&#10;Write your message here...">
+        </div>
+        <div style="font-size:11px; color:#9CA3AF; margin-top:6px;">Tip: click an inserted image to select it, then use the resize handle that appears in its corner to make it bigger or smaller. Hover an image to reveal a small × button to remove it.</div>
+        <input type="file" id="bcImageFileInput" accept="image/*" style="display:none;">
+
+        <label style="margin-top:16px;">Attachments (optional)</label>
+        <div class="file-drop" id="bcAttachmentDrop" style="padding:14px; cursor:pointer;">
+          <span>Tap to attach images or PDF files — sent as real email attachments</span>
+        </div>
+        <input type="file" id="bcAttachmentFileInput" accept="image/*,application/pdf" multiple style="display:none;">
+        <div id="bcAttachmentList" style="margin-top:8px;"></div>
+
+        <label style="margin-top:16px;">Recipients</label>
+        <div id="bcRecipientSummary" style="display:flex; align-items:center; justify-content:space-between; gap:10px; background:var(--cream,#FDF8F0); border:1px solid var(--line,#E4DCC8); border-radius:10px; padding:12px 14px; flex-wrap:wrap;">
+          <span id="bcRecipientSummaryText" style="font-size:13px; color:var(--ink,#13202B); flex:1 1 auto; min-width:0;">No recipients selected yet</span>
+          <button type="button" class="btn-gold" id="bcChooseRecipientsBtn" style="flex:0 0 auto; width:auto; min-height:auto; padding:9px 16px; font-size:12px; white-space:nowrap;">CHOOSE RECIPIENTS</button>
+        </div>
+
+        <div class="row" style="margin-top:18px;">
+          <button class="btn-gold" id="bcPreviewBtn">PREVIEW</button>
+          <button class="btn-primary" id="bcSendBtn">SEND BROADCAST</button>
+        </div>
+        <div class="status" id="broadcastStatus"></div>
+
+        <div id="bcPreviewContainer" style="display:none; margin-top:16px; border:1px solid var(--line,#E4DCC8); border-radius:10px; overflow:hidden;">
+          <div style="background:var(--cream,#FDF8F0); padding:8px 14px; font-size:11px; font-weight:700; color:var(--navy,#0C447C); border-bottom:1px solid var(--line,#E4DCC8);">PREVIEW — sent to: Dela Cruz, Juan Miguel</div>
+          <div id="bcPreviewBody" style="padding:16px; background:#fff; font-size:14px; line-height:1.6;"></div>
+        </div>
+
+        <div id="bcConfirmOverlay" style="display:none; position:fixed; inset:0; z-index:400; background:rgba(8,20,35,.6); align-items:center; justify-content:center; padding:20px;">
+          <div style="background:#fff; border-radius:16px; max-width:360px; width:100%; padding:24px 22px; text-align:center;">
+            <div style="font-size:15px; font-weight:700; color:var(--navy,#0C447C); margin-bottom:8px;">Send this broadcast?</div>
+            <div id="bcConfirmCount" style="font-size:13px; color:#6B7280; margin-bottom:20px; line-height:1.6;"></div>
+            <div style="display:flex; gap:8px;">
+              <button class="btn-ghost" id="bcConfirmCancel" style="flex:1;">CANCEL</button>
+              <button class="btn-primary" id="bcConfirmSend" style="flex:1;">YES, SEND</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Recipient Picker — full-screen modal, opened from "CHOOSE RECIPIENTS" -->
+      <div id="bcPickerOverlay" style="display:none; position:fixed; inset:0; z-index:450; background:var(--cream,#FDF8F0); flex-direction:column;">
+        <div style="background:var(--navy,#0C447C); padding:14px 16px; display:flex; align-items:center; justify-content:space-between; flex:0 0 auto;">
+          <div style="color:#fff; font-weight:700; font-size:15px;">Choose Recipients</div>
+          <button type="button" id="bcPickerCloseBtn" style="flex:0 0 auto; width:auto; min-height:auto; background:rgba(255,255,255,.15); border:none; color:#fff; border-radius:8px; padding:6px 12px; font-size:13px; font-weight:600; cursor:pointer;">Done</button>
+        </div>
+
+        <div style="padding:12px 16px; flex:0 0 auto; background:#fff; border-bottom:1px solid var(--line,#E4DCC8);">
+          <input type="text" id="bcPickerSearch" placeholder="Search by name..." style="width:100%; padding:10px 14px; border:1px solid var(--line,#E4DCC8); border-radius:10px; background:var(--cream,#FDF8F0); font-size:14px; margin-bottom:10px;">
+
+          <div style="font-size:11px; color:#6B7280; margin-bottom:6px;">Sort by:</div>
+          <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-bottom:10px;">
+            <button type="button" class="bc-sort-btn active" data-sort="fundValue">Fund Value</button>
+            <button type="button" class="bc-sort-btn" data-sort="product">Plan Name</button>
+            <button type="button" class="bc-sort-btn" data-sort="clientName">Name</button>
+            <button type="button" class="bc-sort-btn" data-sort="dueDate">Due Date</button>
+          </div>
+
+          <div id="bcPlanFilterWrap" style="margin-bottom:10px;">
+            <select id="bcPlanFilter" style="width:100%; padding:9px 12px; border:1px solid var(--line,#E4DCC8); border-radius:10px; background:var(--cream,#FDF8F0); font-size:13px; color:var(--ink,#13202B);">
+              <option value="">All plans</option>
+            </select>
+          </div>
+
+          <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+            <span style="font-size:11px; color:#6B7280; margin-right:2px;">Quick select:</span>
+            <button type="button" class="bc-quick-btn" data-top="10">Top 10</button>
+            <button type="button" class="bc-quick-btn" data-top="50">Top 50</button>
+            <button type="button" class="bc-quick-btn" data-top="100">Top 100</button>
+            <button type="button" class="bc-quick-btn" id="bcSelectAllBtn">Select All</button>
+            <button type="button" class="bc-quick-btn" id="bcClearSelectionBtn">Clear</button>
+          </div>
+          <div id="bcSortHint" style="font-size:11px; color:#9CA3AF; margin-top:8px;">Sorted by fund value (highest first) · tap Top N to select the N clients shown below</div>
+        </div>
+
+        <div id="bcPickerList" style="flex:1 1 auto; overflow-y:auto; padding:8px 12px 90px;"></div>
+
+        <div style="position:fixed; bottom:0; left:0; right:0; background:#fff; border-top:1px solid var(--line,#E4DCC8); padding:12px 16px; display:flex; align-items:center; justify-content:space-between;">
+          <span id="bcPickerSelectedCount" style="font-size:13px; font-weight:700; color:var(--navy,#0C447C);">0 selected</span>
+          <button type="button" class="btn-primary" id="bcPickerDoneBtn" style="flex:0 0 auto; width:auto; min-height:auto; padding:11px 24px; font-size:13px;">DONE</button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ============================================================
          SETTINGS (existing real functionality — Setup / Branding / Password)
          ============================================================ -->
     <div id="settingsSection" data-section="settings" class="mt-2">
@@ -1723,110 +1838,6 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
         </div>
       </div>
 
-      <div class="card" id="broadcastCard" style="display:none;">
-        <h2>Broadcast Email</h2>
-        <p class="sub">Write a custom message and choose exactly who receives it. Use <strong>{FirstName}</strong> anywhere in your message and it will be replaced with each client's actual first name.</p>
-
-        <label for="broadcastSubject">Subject</label>
-        <input type="text" id="broadcastSubject" placeholder="e.g. A quick update from your advisor">
-
-        <label style="margin-top:12px;">Message</label>
-        <div id="broadcastToolbar" style="display:flex; gap:4px; flex-wrap:wrap; margin:6px 0 8px; padding:8px; background:var(--cream,#FDF8F0); border:1px solid var(--line,#E4DCC8); border-radius:8px 8px 0 0;">
-          <button type="button" class="bc-tool-btn" data-cmd="bold" title="Bold" style="font-weight:800;">B</button>
-          <button type="button" class="bc-tool-btn" data-cmd="italic" title="Italic" style="font-style:italic;">I</button>
-          <button type="button" class="bc-tool-btn" data-cmd="underline" title="Underline" style="text-decoration:underline;">U</button>
-          <span style="width:1px; background:var(--line,#E4DCC8); margin:2px 4px;"></span>
-          <button type="button" class="bc-tool-btn" id="bcInsertLinkBtn" title="Insert link">🔗 Link</button>
-          <button type="button" class="bc-tool-btn" id="bcInsertImageBtn" title="Insert image">🖼️ Image</button>
-          <span style="width:1px; background:var(--line,#E4DCC8); margin:2px 4px;"></span>
-          <button type="button" class="bc-tool-btn" data-cmd="insertUnorderedList" title="Bullet list">• List</button>
-          <button type="button" class="bc-tool-btn" id="bcClearFormatBtn" title="Clear formatting">Clear</button>
-        </div>
-        <div id="broadcastEditor" contenteditable="true"
-             style="min-height:160px; max-height:340px; overflow-y:auto; background:#fff; border:1px solid var(--line,#E4DCC8); border-top:none; border-radius:0 0 8px 8px; padding:12px 14px; font-size:14px; line-height:1.6; color:var(--ink,#13202B);"
-             data-placeholder="Hi {FirstName},&#10;&#10;Write your message here...">
-        </div>
-        <input type="file" id="bcImageFileInput" accept="image/*" style="display:none;">
-
-        <label style="margin-top:16px;">Attachments (optional)</label>
-        <div class="file-drop" id="bcAttachmentDrop" style="padding:14px; cursor:pointer;">
-          <span>Tap to attach images or PDF files — sent as real email attachments</span>
-        </div>
-        <input type="file" id="bcAttachmentFileInput" accept="image/*,application/pdf" multiple style="display:none;">
-        <div id="bcAttachmentList" style="margin-top:8px;"></div>
-
-        <label style="margin-top:16px;">Recipients</label>
-        <div id="bcRecipientSummary" style="display:flex; align-items:center; justify-content:space-between; gap:10px; background:var(--cream,#FDF8F0); border:1px solid var(--line,#E4DCC8); border-radius:10px; padding:12px 14px; flex-wrap:wrap;">
-          <span id="bcRecipientSummaryText" style="font-size:13px; color:var(--ink,#13202B); flex:1 1 auto; min-width:0;">No recipients selected yet</span>
-          <button type="button" class="btn-gold" id="bcChooseRecipientsBtn" style="flex:0 0 auto; width:auto; min-height:auto; padding:9px 16px; font-size:12px; white-space:nowrap;">CHOOSE RECIPIENTS</button>
-        </div>
-
-        <div class="row" style="margin-top:18px;">
-          <button class="btn-gold" id="bcPreviewBtn">PREVIEW</button>
-          <button class="btn-primary" id="bcSendBtn">SEND BROADCAST</button>
-        </div>
-        <div class="status" id="broadcastStatus"></div>
-
-        <div id="bcPreviewContainer" style="display:none; margin-top:16px; border:1px solid var(--line,#E4DCC8); border-radius:10px; overflow:hidden;">
-          <div style="background:var(--cream,#FDF8F0); padding:8px 14px; font-size:11px; font-weight:700; color:var(--navy,#0C447C); border-bottom:1px solid var(--line,#E4DCC8);">PREVIEW — sent to: Dela Cruz, Juan Miguel</div>
-          <div id="bcPreviewBody" style="padding:16px; background:#fff; font-size:14px; line-height:1.6;"></div>
-        </div>
-
-        <div id="bcConfirmOverlay" style="display:none; position:fixed; inset:0; z-index:400; background:rgba(8,20,35,.6); align-items:center; justify-content:center; padding:20px;">
-          <div style="background:#fff; border-radius:16px; max-width:360px; width:100%; padding:24px 22px; text-align:center;">
-            <div style="font-size:15px; font-weight:700; color:var(--navy,#0C447C); margin-bottom:8px;">Send this broadcast?</div>
-            <div id="bcConfirmCount" style="font-size:13px; color:#6B7280; margin-bottom:20px; line-height:1.6;"></div>
-            <div style="display:flex; gap:8px;">
-              <button class="btn-ghost" id="bcConfirmCancel" style="flex:1;">CANCEL</button>
-              <button class="btn-primary" id="bcConfirmSend" style="flex:1;">YES, SEND</button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Recipient Picker — full-screen modal, opened from "CHOOSE RECIPIENTS" -->
-      <div id="bcPickerOverlay" style="display:none; position:fixed; inset:0; z-index:450; background:var(--cream,#FDF8F0); flex-direction:column;">
-        <div style="background:var(--navy,#0C447C); padding:14px 16px; display:flex; align-items:center; justify-content:space-between; flex:0 0 auto;">
-          <div style="color:#fff; font-weight:700; font-size:15px;">Choose Recipients</div>
-          <button type="button" id="bcPickerCloseBtn" style="flex:0 0 auto; width:auto; min-height:auto; background:rgba(255,255,255,.15); border:none; color:#fff; border-radius:8px; padding:6px 12px; font-size:13px; font-weight:600; cursor:pointer;">Done</button>
-        </div>
-
-        <div style="padding:12px 16px; flex:0 0 auto; background:#fff; border-bottom:1px solid var(--line,#E4DCC8);">
-          <input type="text" id="bcPickerSearch" placeholder="Search by name..." style="width:100%; padding:10px 14px; border:1px solid var(--line,#E4DCC8); border-radius:10px; background:var(--cream,#FDF8F0); font-size:14px; margin-bottom:10px;">
-
-          <div style="font-size:11px; color:#6B7280; margin-bottom:6px;">Sort by:</div>
-          <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-bottom:10px;">
-            <button type="button" class="bc-sort-btn active" data-sort="fundValue">Fund Value</button>
-            <button type="button" class="bc-sort-btn" data-sort="product">Plan Name</button>
-            <button type="button" class="bc-sort-btn" data-sort="clientName">Name</button>
-            <button type="button" class="bc-sort-btn" data-sort="dueDate">Due Date</button>
-          </div>
-
-          <div id="bcPlanFilterWrap" style="margin-bottom:10px;">
-            <select id="bcPlanFilter" style="width:100%; padding:9px 12px; border:1px solid var(--line,#E4DCC8); border-radius:10px; background:var(--cream,#FDF8F0); font-size:13px; color:var(--ink,#13202B);">
-              <option value="">All plans</option>
-            </select>
-          </div>
-
-          <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
-            <span style="font-size:11px; color:#6B7280; margin-right:2px;">Quick select:</span>
-            <button type="button" class="bc-quick-btn" data-top="10">Top 10</button>
-            <button type="button" class="bc-quick-btn" data-top="50">Top 50</button>
-            <button type="button" class="bc-quick-btn" data-top="100">Top 100</button>
-            <button type="button" class="bc-quick-btn" id="bcSelectAllBtn">Select All</button>
-            <button type="button" class="bc-quick-btn" id="bcClearSelectionBtn">Clear</button>
-          </div>
-          <div id="bcSortHint" style="font-size:11px; color:#9CA3AF; margin-top:8px;">Sorted by fund value (highest first) · tap Top N to select the N clients shown below</div>
-        </div>
-
-        <div id="bcPickerList" style="flex:1 1 auto; overflow-y:auto; padding:8px 12px 90px;"></div>
-
-        <div style="position:fixed; bottom:0; left:0; right:0; background:#fff; border-top:1px solid var(--line,#E4DCC8); padding:12px 16px; display:flex; align-items:center; justify-content:space-between;">
-          <span id="bcPickerSelectedCount" style="font-size:13px; font-weight:700; color:var(--navy,#0C447C);">0 selected</span>
-          <button type="button" class="btn-primary" id="bcPickerDoneBtn" style="flex:0 0 auto; width:auto; min-height:auto; padding:11px 24px; font-size:13px;">DONE</button>
-        </div>
-      </div>
-
       <div class="card" id="birthdayPreviewCard" style="display:none;">
         <h2>Preview Birthday Email</h2>
         <p class="sub">See exactly what clients receive, using your real header/footer photos and Connect link.</p>
@@ -1891,6 +1902,7 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
   <div class="mobile-nav-item" data-nav="birthday" onclick="scrollToSection('birthday')"><span class="ico">🎂</span>Birthdays</div>
   <div class="mobile-nav-item" data-nav="upload" onclick="scrollToSection('upload')"><span class="ico">📤</span>Upload</div>
   <div class="mobile-nav-item" data-nav="clients" onclick="scrollToSection('clients')"><span class="ico">👥</span>Clients</div>
+  <div class="mobile-nav-item" data-nav="broadcast" onclick="scrollToSection('broadcast')"><span class="ico">📣</span>Broadcast</div>
   <div class="mobile-nav-item" id="mobileLogoutLink" onclick="logoutUser()" style="color:#d32f2f;"><span class="ico">🚪</span>Logout</div>
 </nav>
 
@@ -2129,16 +2141,19 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
 let currentPage = 'dues';
 
 function showPage(pageName){
-  if (pageName !== 'dues' && pageName !== 'birthday' && pageName !== 'clients') return;
+  if (pageName !== 'dues' && pageName !== 'birthday' && pageName !== 'clients' && pageName !== 'broadcast') return;
   currentPage = pageName;
   document.getElementById('page-dues').style.display = (pageName === 'dues') ? '' : 'none';
   document.getElementById('page-birthday').style.display = (pageName === 'birthday') ? '' : 'none';
   document.getElementById('page-clients').style.display = (pageName === 'clients') ? '' : 'none';
+  document.getElementById('page-broadcast').style.display = (pageName === 'broadcast') ? '' : 'none';
 
   const titles = pageName === 'birthday'
     ? { line1: 'Client Birthday', line2: 'Greetings', full: 'Client Birthday Greetings' }
     : pageName === 'clients'
     ? { line1: 'Manage Your', line2: 'Clients', full: 'Manage Your Clients' }
+    : pageName === 'broadcast'
+    ? { line1: 'Broadcast', line2: 'Email', full: 'Broadcast Email' }
     : { line1: 'Premium Due', line2: 'Reminders', full: 'Premium Due Reminders' };
   document.getElementById('sidebarTitleLine1').textContent = titles.line1;
   document.getElementById('sidebarTitleLine2').textContent = titles.line2;
@@ -2149,7 +2164,7 @@ function showPage(pageName){
 
 function scrollToSection(name){
   // Full page switches
-  if (name === 'dues' || name === 'birthday' || name === 'clients'){
+  if (name === 'dues' || name === 'birthday' || name === 'clients' || name === 'broadcast'){
     showPage(name);
     window.scrollTo({ top:0, behavior:'smooth' });
     document.querySelectorAll('.sidebar-link, .mobile-nav-item').forEach(el => el.classList.remove('active'));
@@ -2721,7 +2736,6 @@ el('toggleConfig').addEventListener('click', () => {
   const bp = el('birthdayPreviewCard');
   const bt = el('birthdayTestEmailCard');
   const pl = el('personalLinkCard');
-  const bc = el('broadcastCard');
   const show = c.style.display === 'none';
   c.style.display = show ? 'block' : 'none';
   b.style.display = show ? 'block' : 'none';
@@ -2732,7 +2746,6 @@ el('toggleConfig').addEventListener('click', () => {
   bp.style.display = show ? 'block' : 'none';
   bt.style.display = show ? 'block' : 'none';
   pl.style.display = show ? 'block' : 'none';
-  bc.style.display = show ? 'block' : 'none';
 });
 
 el('saveScriptUrl').addEventListener('click', () => {
@@ -2955,14 +2968,111 @@ el('bcImageFileInput').addEventListener('change', async (e) => {
   try{
     const base64 = await fileToBase64(file);
     el('broadcastEditor').focus();
-    document.execCommand('insertHTML', false,
-      '<img src="data:' + file.type + ';base64,' + base64 + '" style="max-width:100%;border-radius:8px;margin:8px 0;display:block;">'
-    );
+    insertResizableImage('data:' + file.type + ';base64,' + base64);
   }catch(err){
     showStatus('broadcastStatus','error','Could not insert image: ' + err.message);
   }
   e.target.value = '';
 });
+
+// Inserts an image wrapped in a small non-editable control div, so a
+// remove (×) button and a resize handle can sit on top of it without
+// the person accidentally typing into the image itself. The wrapper
+// and controls are cosmetic only — when the message is sent, only the
+// <img> tag with its final width survives (see stripEditorControls),
+// so the actual email just contains a normal, appropriately-sized image.
+let bcImgIdCounter = 0;
+function insertResizableImage(src){
+  const id = 'bcimg' + (++bcImgIdCounter);
+  document.execCommand('insertHTML', false,
+    '<span class="bc-img-wrap" data-img-id="' + id + '" contenteditable="false" style="position:relative; display:inline-block; max-width:100%; margin:8px 0;">' +
+      '<img src="' + src + '" data-img-id="' + id + '" style="max-width:100%; width:320px; border-radius:8px; display:block;">' +
+      '<button type="button" class="bc-img-remove" data-img-id="' + id + '" title="Remove image" style="position:absolute; top:-8px; right:-8px; width:22px; height:22px; border-radius:50%; background:#EB5757; color:#fff; border:2px solid #fff; font-size:13px; line-height:1; cursor:pointer; display:none; align-items:center; justify-content:center;">\u00d7</button>' +
+      '<span class="bc-img-resize" data-img-id="' + id + '" title="Drag to resize" style="position:absolute; bottom:-2px; right:-2px; width:16px; height:16px; background:var(--gold,#C99A3B); border:2px solid #fff; border-radius:3px; cursor:nwse-resize; display:none;"></span>' +
+    '</span>&nbsp;'
+  );
+  wireImageControls();
+}
+
+// Shows/hides each image's remove + resize controls on hover (desktop)
+// and wires up the drag-to-resize behavior. Called after every image
+// insertion since new DOM nodes need fresh listeners.
+function wireImageControls(){
+  document.querySelectorAll('.bc-img-wrap').forEach(wrap => {
+    if (wrap.dataset.wired) return;
+    wrap.dataset.wired = '1';
+
+    const removeBtn = wrap.querySelector('.bc-img-remove');
+    const resizeHandle = wrap.querySelector('.bc-img-resize');
+    const img = wrap.querySelector('img');
+
+    wrap.addEventListener('mouseenter', () => {
+      removeBtn.style.display = 'flex';
+      resizeHandle.style.display = 'block';
+    });
+    wrap.addEventListener('mouseleave', () => {
+      removeBtn.style.display = 'none';
+      resizeHandle.style.display = 'none';
+    });
+    // Touch devices have no hover — tapping the image toggles controls
+    img.addEventListener('click', (e) => {
+      e.preventDefault();
+      const showing = removeBtn.style.display === 'flex';
+      removeBtn.style.display = showing ? 'none' : 'flex';
+      resizeHandle.style.display = showing ? 'none' : 'block';
+    });
+
+    removeBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      wrap.remove();
+    });
+
+    let resizing = false, startX = 0, startWidth = 0;
+    function startResize(clientX){
+      resizing = true;
+      startX = clientX;
+      startWidth = img.getBoundingClientRect().width;
+    }
+    function doResize(clientX){
+      if (!resizing) return;
+      const delta = clientX - startX;
+      const newWidth = Math.max(60, Math.min(640, startWidth + delta));
+      img.style.width = newWidth + 'px';
+    }
+    function endResize(){ resizing = false; }
+
+    resizeHandle.addEventListener('mousedown', (e) => { e.preventDefault(); startResize(e.clientX); });
+    document.addEventListener('mousemove', (e) => doResize(e.clientX));
+    document.addEventListener('mouseup', endResize);
+
+    resizeHandle.addEventListener('touchstart', (e) => { startResize(e.touches[0].clientX); }, { passive: true });
+    document.addEventListener('touchmove', (e) => {
+      if (resizing && e.touches[0]) doResize(e.touches[0].clientX);
+    }, { passive: true });
+    document.addEventListener('touchend', endResize);
+  });
+}
+
+// Strips the cosmetic wrapper/controls before the message is sent or
+// previewed, leaving plain <img width="..."> tags — the only thing
+// that actually needs to reach GmailApp.sendEmail(). Operates on a
+// detached clone so the live editor (with its controls) is untouched.
+function stripEditorControls(html){
+  const temp = document.createElement('div');
+  temp.innerHTML = html;
+  temp.querySelectorAll('.bc-img-wrap').forEach(wrap => {
+    const img = wrap.querySelector('img');
+    if (img){
+      const width = img.style.width || img.getBoundingClientRect().width + 'px';
+      img.setAttribute('width', parseInt(width, 10));
+      img.removeAttribute('data-img-id');
+      img.style.cssText = 'max-width:100%; border-radius:8px; display:block; margin:8px 0;';
+      wrap.replaceWith(img);
+    }
+  });
+  return temp.innerHTML;
+}
 
 // Attachments (images or PDFs) — sent as real email attachments,
 // separate from the inline body image above.
@@ -3206,7 +3316,7 @@ el('bcPickerDoneBtn').addEventListener('click', closeBcPicker);
 
 el('bcPreviewBtn').addEventListener('click', () => {
   const subject = el('broadcastSubject').value.trim();
-  const body = el('broadcastEditor').innerHTML.trim();
+  const body = stripEditorControls(el('broadcastEditor').innerHTML.trim());
   if (!body){
     showStatus('broadcastStatus','error','Write a message first.');
     return;
@@ -3221,7 +3331,7 @@ el('bcPreviewBtn').addEventListener('click', () => {
 
 el('bcSendBtn').addEventListener('click', async () => {
   const subject = el('broadcastSubject').value.trim();
-  const body = el('broadcastEditor').innerHTML.trim();
+  const body = stripEditorControls(el('broadcastEditor').innerHTML.trim());
   if (!subject){
     showStatus('broadcastStatus','error','Please add a subject line.');
     return;
