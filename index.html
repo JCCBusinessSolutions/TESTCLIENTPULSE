@@ -3446,17 +3446,30 @@ el('bcPreviewBtn').addEventListener('click', async () => {
 // header/footer template if on), all base64-encoded like Gmail actually
 // sends it. Reused by both the live on-screen indicator and the
 // pre-send blocking check, so they always agree with each other.
+//
+// Returns { mb, uncertain }. uncertain=true means the header/footer
+// fetch failed or returned nothing while the template toggle is on \u2014
+// in that case mb is NOT a safe number to trust, because treating a
+// failed fetch as "0 extra bytes" is exactly what let an oversized
+// template slip past this check silently before (the actual root
+// cause behind repeated "Email is too large" failures at send time
+// despite the indicator showing a small, deceptively safe size).
 async function calculateBroadcastSizeMB(){
   const body = stripEditorControls(el('broadcastEditor').innerHTML.trim());
   const bodyBytes = new Blob([body]).size;
   const attachmentBytes = bcAttachments.reduce((sum, a) => sum + Math.ceil((a.base64 || '').length * 0.75), 0);
   let templateBytes = 0;
+  let uncertain = false;
   if (bcUseTemplate){
     const [headerImg, footerImg] = await Promise.all([ensurePreviewImage('header'), ensurePreviewImage('footer')]);
-    templateBytes += headerImg ? Math.ceil(headerImg.split(',')[1].length * 0.75) : 0;
-    templateBytes += footerImg ? Math.ceil(footerImg.split(',')[1].length * 0.75) : 0;
+    if (!headerImg || !footerImg){
+      uncertain = true;
+    } else {
+      templateBytes += Math.ceil(headerImg.split(',')[1].length * 0.75);
+      templateBytes += Math.ceil(footerImg.split(',')[1].length * 0.75);
+    }
   }
-  return (bodyBytes + attachmentBytes + templateBytes) / (1024 * 1024);
+  return { mb: (bodyBytes + attachmentBytes + templateBytes) / (1024 * 1024), uncertain: uncertain };
 }
 
 // Gmail's real usable ceiling, once MIME/base64 overhead is factored
@@ -3465,8 +3478,15 @@ async function calculateBroadcastSizeMB(){
 const BC_MAX_SIZE_MB = 8;
 
 async function updateSizeIndicator(){
-  const mb = await calculateBroadcastSizeMB();
+  const result = await calculateBroadcastSizeMB();
   const el2 = el('bcSizeIndicator');
+  if (result.uncertain){
+    el2.textContent = '\u26a0 Could not verify your header/footer photo size \u2014 check your connection, or re-open Settings once to reload them.';
+    el2.style.color = '#EB5757';
+    el2.style.fontWeight = '700';
+    return;
+  }
+  const mb = result.mb;
   const over = mb > BC_MAX_SIZE_MB;
   el2.textContent = 'Message size: ~' + mb.toFixed(2) + 'MB of ' + BC_MAX_SIZE_MB + 'MB limit' + (over ? ' \u2014 too large!' : '');
   el2.style.color = over ? '#EB5757' : mb > BC_MAX_SIZE_MB * 0.7 ? '#B45309' : '#9CA3AF';
@@ -3500,8 +3520,16 @@ el('bcSendBtn').addEventListener('click', async () => {
   // Gmail rejects sends once the total message size (body + inline
   // images + attachments, all base64-encoded) passes its limit. Warn
   // before sending rather than letting every recipient fail silently.
-  const estimatedTotalMB = await calculateBroadcastSizeMB();
+  const sizeResult = await calculateBroadcastSizeMB();
   await updateSizeIndicator();
+  if (sizeResult.uncertain){
+    showStatus('broadcastStatus','error',
+      'Could not verify your header/footer photo size before sending \u2014 this usually means the Setup URL can\u2019t be reached right now. ' +
+      'Check your connection and try again, or turn off "Use header & footer template" to send without it.'
+    );
+    return;
+  }
+  const estimatedTotalMB = sizeResult.mb;
   if (estimatedTotalMB > BC_MAX_SIZE_MB){
     showStatus('broadcastStatus','error',
       'This message is too large (~' + estimatedTotalMB.toFixed(1) + 'MB, limit is ' + BC_MAX_SIZE_MB + 'MB) and will likely fail to send. ' +
