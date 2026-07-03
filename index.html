@@ -3437,17 +3437,29 @@ el('bcSendBtn').addEventListener('click', async () => {
 
   // Gmail rejects sends once the total message size (body + inline
   // images + attachments, all base64-encoded) passes its limit. Warn
-  // before sending rather than letting every recipient fail silently —
-  // base64 runs about 4/3 the size of the original bytes, so this is
-  // an estimate, not exact, but catches the common case (one oversized
-  // photo) before it wastes a send attempt.
+  // before sending rather than letting every recipient fail silently.
+  // base64 runs about 4/3 the size of the original bytes, and Gmail's
+  // real usable ceiling (once MIME/base64 overhead is factored in) is
+  // meaningfully lower than its ~25MB nominal limit — 12MB of combined
+  // raw content is a safer practical threshold. Critically, this must
+  // also count the header/footer template images when that toggle is
+  // on, since those are real inlined images too (previously missed
+  // here, which is why a template-wrapped broadcast could still fail
+  // even after the inline editor image itself was compressed).
   const bodyBytes = new Blob([body]).size;
   const attachmentBytes = bcAttachments.reduce((sum, a) => sum + Math.ceil((a.base64 || '').length * 0.75), 0);
-  const estimatedTotalMB = (bodyBytes + attachmentBytes) / (1024 * 1024);
-  if (estimatedTotalMB > 20){
+  let templateBytes = 0;
+  if (bcUseTemplate){
+    const [headerImg, footerImg] = await Promise.all([ensurePreviewImage('header'), ensurePreviewImage('footer')]);
+    templateBytes += headerImg ? Math.ceil(headerImg.split(',')[1].length * 0.75) : 0;
+    templateBytes += footerImg ? Math.ceil(footerImg.split(',')[1].length * 0.75) : 0;
+  }
+  const estimatedTotalMB = (bodyBytes + attachmentBytes + templateBytes) / (1024 * 1024);
+  if (estimatedTotalMB > 12){
     showStatus('broadcastStatus','error',
       'This message is too large (~' + estimatedTotalMB.toFixed(1) + 'MB) and will likely fail to send. ' +
-      'Try removing an inline image or attachment, or use fewer/smaller photos.'
+      (bcUseTemplate ? 'Try turning off the header/footer template, or ' : 'Try ') +
+      'removing an inline image or attachment, or use fewer/smaller photos.'
     );
     return;
   }
@@ -3598,7 +3610,14 @@ async function handlePhotoUpload(target, file){
   const statusId = target === 'header' ? 'headerImgStatus' : 'footerImgStatus';
   el(statusId).textContent = 'Processing photo\u2026';
   try{
-    const { base64, mimeType } = await resizeImageForUpload(file);
+    // Header/footer banners are embedded in EVERY email sent (dues
+    // reminders, birthday greetings, and now template-wrapped
+    // broadcasts) and are displayed at ~480px wide inside the email
+    // template — 1600px/90% quality (the general-purpose default) is
+    // needlessly large for that and was a real contributor to broadcasts
+    // exceeding Gmail's body size limit. 800px/80% is still sharp at
+    // actual email display size and meaningfully smaller.
+    const { base64, mimeType } = await resizeImageForUpload(file, 800, 0.80);
     el(statusId).textContent = 'Uploading\u2026';
     previewImageCache[target] = 'data:' + mimeType + ';base64,' + base64;
     await callBackend({ action:'uploadImage', target: target, base64: base64, mimeType: mimeType });
