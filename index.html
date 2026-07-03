@@ -3006,14 +3006,12 @@ el('bcImageFileInput').addEventListener('change', async (e) => {
     return;
   }
   try{
-    // Phone camera photos are often 3-10MB, which becomes even larger
-    // once base64-encoded inline into the email HTML. A fixed 900px/82%
-    // pass could still be large for busy/detailed photos, so this
-    // enforces a real 400KB ceiling (inline body images can afford to
-    // be a bit larger than header/footer since there's usually only
-    // one or two per message), retrying at lower quality/size until
-    // actually met.
-    const resized = await resizeImageForUpload(file, 900, 0.82, 400 * 1024);
+    // Resized to a sensible inline-email width, kept at good quality.
+    // (The very tight 900px/82%/400KB cap tried earlier was chasing a
+    // "Broadcast Email too large" bug that turned out to be unrelated \u2014
+    // an assertConfigured requirement bug, not image size \u2014 so this is
+    // back to sharper, better-looking compression.)
+    const resized = await resizeImageForUpload(file, 1200, 0.88);
     el('broadcastEditor').focus();
     insertResizableImage('data:' + resized.mimeType + ';base64,' + resized.base64);
   }catch(err){
@@ -3720,15 +3718,13 @@ async function handlePhotoUpload(target, file){
   const statusId = target === 'header' ? 'headerImgStatus' : 'footerImgStatus';
   el(statusId).textContent = 'Processing photo\u2026';
   try{
-    // Header/footer banners are embedded in EVERY email sent (dues
-    // reminders, birthday greetings, and now template-wrapped
-    // broadcasts) and are displayed at ~480px wide inside the email
-    // template. A fixed 800px/80% pass could still come out large for
-    // busy/detailed photos, which is exactly what kept causing broadcasts
-    // to exceed Gmail's body size limit — so this now enforces a real
-    // 250KB ceiling, retrying at lower quality/size until it's actually
-    // met, not just hoping one compression pass is small enough.
-    const { base64, mimeType } = await resizeImageForUpload(file, 800, 0.80, 250 * 1024);
+    // Resized to a sensible email width and compressed enough to upload
+    // reliably, while staying sharp when displayed in the email template.
+    // (A much more aggressive 800px/80%/250KB cap was tried earlier while
+    // chasing a "Broadcast Email too large" bug, but that turned out to
+    // be an unrelated backend requirement bug, not image size — so this
+    // is back to the original, better-looking quality.)
+    const { base64, mimeType } = await resizeImageForUpload(file, 1600, 0.90);
     el(statusId).textContent = 'Uploading\u2026';
     previewImageCache[target] = 'data:' + mimeType + ';base64,' + base64;
     await callBackend({ action:'uploadImage', target: target, base64: base64, mimeType: mimeType });
