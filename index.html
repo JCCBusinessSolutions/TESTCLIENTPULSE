@@ -1767,7 +1767,15 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
           <button class="btn-gold" id="bcPreviewBtn">PREVIEW</button>
           <button class="btn-primary" id="bcSendBtn">SEND BROADCAST</button>
         </div>
+        <div class="row" style="margin-top:8px;">
+          <button class="btn-ghost" id="bcSaveDraftBtn" style="width:100%;">SAVE AS DRAFT</button>
+        </div>
         <div class="status" id="broadcastStatus"></div>
+
+        <div id="bcDraftsListWrap" style="margin-top:20px;">
+          <label>Saved Drafts</label>
+          <div id="bcDraftsList" style="font-size:13px; color:#9CA3AF;">No saved drafts.</div>
+        </div>
 
         <div id="bcScheduledListWrap" style="margin-top:20px;">
           <label>Scheduled Broadcasts</label>
@@ -2291,6 +2299,9 @@ function showPage(pageName){
   }
   if (pageName === 'broadcast' && typeof refreshScheduledBroadcastsList === 'function'){
     refreshScheduledBroadcastsList();
+  }
+  if (pageName === 'broadcast' && typeof refreshDraftsList === 'function'){
+    refreshDraftsList();
   }
 }
 
@@ -3645,6 +3656,7 @@ async function refreshScheduledBroadcastsList(){
       const when = new Date(s.scheduledFor).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
       return '<div class="bc-scheduled-row">'
         + '<span style="flex:1 1 auto; min-width:0;"><strong>' + escapeHtml(s.subject || '(no subject)') + '</strong><br>' + when + '</span>'
+        + '<button type="button" class="bc-scheduled-edit" data-id="' + escapeHtml(s.scheduleId) + '">EDIT</button>'
         + '<button type="button" class="bc-scheduled-cancel" data-id="' + escapeHtml(s.scheduleId) + '">CANCEL</button>'
         + '</div>';
     }).join('');
@@ -3660,9 +3672,167 @@ async function refreshScheduledBroadcastsList(){
         }
       });
     });
+    container.querySelectorAll('.bc-scheduled-edit').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const schedule = active.find(s => s.scheduleId === btn.dataset.id);
+        if (schedule) loadScheduleIntoEditor(schedule);
+      });
+    });
   }catch(err){
     container.innerHTML = '<div style="font-size:13px; color:#9CA3AF;">Could not load scheduled broadcasts.</div>';
   }
+}
+
+// Loads a queued schedule's saved payload back into the compose area so
+// the advisor can change the message, recipients, or send time before
+// it fires. Reuses the exact same PayloadJSON shape scheduleBroadcast
+// already stores (rows/subject/htmlBody/attachments/useTemplate), so
+// nothing needs to be re-derived — it's the same data going back in.
+let bcEditingScheduleId = null;
+
+async function loadScheduleIntoEditor(schedule){
+  bcEditingScheduleId = schedule.scheduleId;
+  const detail = await callBackend({ action: 'getScheduledBroadcastPayload', scheduleId: schedule.scheduleId });
+  if (!detail || !detail.payload){
+    showStatus('broadcastStatus','error','Could not load this scheduled broadcast for editing.');
+    bcEditingScheduleId = null;
+    return;
+  }
+  const payload = detail.payload;
+  el('broadcastSubject').value = payload.subject || '';
+  el('broadcastEditor').innerHTML = payload.htmlBody || '';
+  bcAttachments = payload.attachments || [];
+  renderBcAttachmentList();
+  bcUseTemplate = !!payload.useTemplate;
+  el('bcTemplateToggle').querySelector('.theme-switch-track').classList.toggle('is-on', bcUseTemplate);
+  bcSelectedEmails = new Set((payload.rows || []).map(r => r.email));
+  bcAllClients = (payload.rows || []).map(r => ({ email: r.email, clientName: r.clientName }));
+  el('bcRecipientSummaryText').textContent = bcSelectedEmails.size + ' recipient' + (bcSelectedEmails.size === 1 ? '' : 's') + ' selected (from the original schedule)';
+
+  el('bcSendLaterBtn').click();
+  const schedDate = new Date(schedule.scheduledFor);
+  const isToday = schedDate.toDateString() === new Date().toDateString();
+  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
+  const isTomorrow = schedDate.toDateString() === tomorrow.toDateString();
+  if (isToday) el('bcDayTodayBtn').click();
+  else if (isTomorrow) el('bcDayTomorrowBtn').click();
+  else {
+    el('bcDayPickBtn').click();
+    el('bcScheduleDateInput').value = schedDate.toISOString().split('T')[0];
+  }
+  const hh = String(schedDate.getHours()).padStart(2, '0');
+  const mm = schedDate.getMinutes() < 30 ? '00' : '30';
+  el('bcScheduleTimeSelect').value = hh + ':' + mm;
+  updateScheduleSummary();
+
+  el('bcSendBtn').textContent = 'UPDATE SCHEDULE';
+  showStatus('broadcastStatus','info','Editing this scheduled broadcast \u2014 make your changes and tap UPDATE SCHEDULE.');
+  el('broadcastCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+/* ============================================================
+   BROADCAST DRAFTS — save a message in progress (subject, body,
+   recipients, attachments, template flag) without sending or
+   scheduling it, so it can be finished later or reused as a
+   starting point.
+   ============================================================ */
+let bcEditingDraftId = null;
+
+el('bcSaveDraftBtn').addEventListener('click', async () => {
+  const subject = el('broadcastSubject').value.trim();
+  const body = stripEditorControls(el('broadcastEditor').innerHTML.trim());
+  if (!subject && !body){
+    showStatus('broadcastStatus','error','Nothing to save yet \u2014 write a subject or message first.');
+    return;
+  }
+  el('bcSaveDraftBtn').disabled = true;
+  const originalText = el('bcSaveDraftBtn').textContent;
+  el('bcSaveDraftBtn').textContent = 'SAVING...';
+  try{
+    const recipients = bcAllClients.filter(c => bcSelectedEmails.has(c.email));
+    const payload = {
+      rows: recipients.map(c => ({ email: c.email, clientName: c.clientName })),
+      subject: subject,
+      htmlBody: body,
+      attachments: bcAttachments,
+      useTemplate: !!bcUseTemplate
+    };
+    const result = await callBackend({ action: 'saveDraft', draftId: bcEditingDraftId, payload: payload });
+    if (!result.success){
+      throw new Error(result.error || 'Unknown error from server');
+    }
+    bcEditingDraftId = result.draftId; // subsequent saves update this same draft
+    showStatus('broadcastStatus','success','Draft saved.');
+    await refreshDraftsList();
+  }catch(err){
+    showStatus('broadcastStatus','error','Could not save draft: ' + err.message);
+  }finally{
+    el('bcSaveDraftBtn').disabled = false;
+    el('bcSaveDraftBtn').textContent = originalText;
+  }
+});
+
+async function refreshDraftsList(){
+  const container = el('bcDraftsList');
+  try{
+    const data = await callBackend({ action: 'getDrafts' });
+    const drafts = (data && data.drafts) || [];
+    if (drafts.length === 0){
+      container.innerHTML = '<div style="font-size:13px; color:#9CA3AF;">No saved drafts.</div>';
+      return;
+    }
+    container.innerHTML = drafts.map(d => {
+      const updated = new Date(d.updatedAt).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
+      return '<div class="bc-scheduled-row">'
+        + '<span style="flex:1 1 auto; min-width:0; cursor:pointer;" data-load-draft="' + escapeHtml(d.draftId) + '"><strong>' + escapeHtml(d.subject || '(no subject)') + '</strong><br>Saved ' + updated + '</span>'
+        + '<button type="button" class="bc-scheduled-cancel" data-delete-draft="' + escapeHtml(d.draftId) + '">DELETE</button>'
+        + '</div>';
+    }).join('');
+    container.querySelectorAll('[data-load-draft]').forEach(span => {
+      span.addEventListener('click', () => {
+        const draft = drafts.find(d => d.draftId === span.dataset.loadDraft);
+        if (draft) loadDraftIntoEditor(draft);
+      });
+    });
+    container.querySelectorAll('[data-delete-draft]').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        btn.disabled = true;
+        btn.textContent = '...';
+        try{
+          await callBackend({ action: 'deleteDraft', draftId: btn.dataset.deleteDraft });
+          if (bcEditingDraftId === btn.dataset.deleteDraft) bcEditingDraftId = null;
+          await refreshDraftsList();
+        }catch(err){
+          showStatus('broadcastStatus','error','Could not delete draft: ' + err.message);
+        }
+      });
+    });
+  }catch(err){
+    container.innerHTML = '<div style="font-size:13px; color:#9CA3AF;">Could not load drafts.</div>';
+  }
+}
+
+function loadDraftIntoEditor(draft){
+  bcEditingDraftId = draft.draftId;
+  bcEditingScheduleId = null; // loading a draft always means "compose fresh", not "editing a schedule"
+  const payload = draft.payload || {};
+  el('broadcastSubject').value = payload.subject || '';
+  el('broadcastEditor').innerHTML = payload.htmlBody || '';
+  bcAttachments = payload.attachments || [];
+  renderBcAttachmentList();
+  bcUseTemplate = !!payload.useTemplate;
+  el('bcTemplateToggle').querySelector('.theme-switch-track').classList.toggle('is-on', bcUseTemplate);
+  bcSelectedEmails = new Set((payload.rows || []).map(r => r.email));
+  bcAllClients = (payload.rows || []).map(r => ({ email: r.email, clientName: r.clientName }));
+  const n = bcSelectedEmails.size;
+  el('bcRecipientSummaryText').textContent = n === 0
+    ? 'No recipients selected yet'
+    : n + ' recipient' + (n === 1 ? '' : 's') + ' selected (from the saved draft)';
+  el('bcSendNowBtn').click();
+  el('bcSendBtn').textContent = 'SEND BROADCAST';
+  showStatus('broadcastStatus','info','Draft loaded \u2014 continue editing, then send, schedule, or save again.');
+  el('broadcastCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 /* ============================================================
@@ -3776,7 +3946,15 @@ async function calculateBroadcastSizeMB(){
 // Gmail's real usable ceiling, once MIME/base64 overhead is factored
 // in, is meaningfully lower than its ~25MB nominal limit. 8MB of
 // combined raw content is a conservative, safe practical threshold.
-const BC_MAX_SIZE_MB = 8;
+// 6MB is a deliberately conservative safety margin, matching the
+// backend's own check in Code.gs (sendBroadcastEmailBatch) — kept in
+// sync manually since Apps Script and the browser don't share
+// constants. Lowered from 8MB after a real broadcast that measured
+// ~7.5MB under the old threshold still failed to actually send;
+// Google's documentation notes email body/header size and attachments
+// size are quota-limited *separately* in ways not fully published, so
+// this errs well on the safe side rather than cutting it close.
+const BC_MAX_SIZE_MB = 6;
 
 async function updateSizeIndicator(){
   const result = await calculateBroadcastSizeMB();
@@ -3882,7 +4060,8 @@ el('bcSendBtn').addEventListener('click', async () => {
 // Queues the broadcast for later instead of sending immediately \u2014
 // packages the same payload shape sendBroadcastEmailBatch expects, so
 // the trigger handler on the backend can replay it exactly at the
-// scheduled time.
+// scheduled time. If bcEditingScheduleId is set, this updates that
+// existing schedule in place instead of creating a new one.
 async function runScheduleBroadcast(recipients, subject, body, useTemplate, scheduledDate){
   el('bcSendBtn').disabled = true;
   el('bcPreviewBtn').disabled = true;
@@ -3895,16 +4074,32 @@ async function runScheduleBroadcast(recipients, subject, body, useTemplate, sche
       attachments: bcAttachments,
       useTemplate: !!useTemplate
     };
-    const result = await callBackend({
-      action: 'scheduleBroadcast',
-      scheduledFor: scheduledDate.toISOString(),
-      payload: payload
-    });
-    if (!result.success){
-      throw new Error(result.error || 'Unknown error from server');
-    }
     const formatted = scheduledDate.toLocaleString('en-PH', { weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
-    showStatus('broadcastStatus','success', 'Scheduled \u2014 will send to ' + recipients.length + ' client' + (recipients.length === 1 ? '' : 's') + ' on ' + formatted + '.');
+
+    if (bcEditingScheduleId){
+      const result = await callBackend({
+        action: 'editScheduledBroadcast',
+        scheduleId: bcEditingScheduleId,
+        scheduledFor: scheduledDate.toISOString(),
+        payload: payload
+      });
+      if (!result.success){
+        throw new Error(result.error || 'Unknown error from server');
+      }
+      showStatus('broadcastStatus','success', 'Updated \u2014 will now send to ' + recipients.length + ' client' + (recipients.length === 1 ? '' : 's') + ' on ' + formatted + '.');
+      bcEditingScheduleId = null;
+      el('bcSendBtn').textContent = 'SCHEDULE BROADCAST';
+    } else {
+      const result = await callBackend({
+        action: 'scheduleBroadcast',
+        scheduledFor: scheduledDate.toISOString(),
+        payload: payload
+      });
+      if (!result.success){
+        throw new Error(result.error || 'Unknown error from server');
+      }
+      showStatus('broadcastStatus','success', 'Scheduled \u2014 will send to ' + recipients.length + ' client' + (recipients.length === 1 ? '' : 's') + ' on ' + formatted + '.');
+    }
     await refreshScheduledBroadcastsList();
   }catch(err){
     showStatus('broadcastStatus','error','Could not schedule: ' + err.message);
