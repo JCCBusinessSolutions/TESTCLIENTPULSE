@@ -3728,6 +3728,15 @@ async function loadScheduleIntoEditor(schedule){
   el('bcSendBtn').textContent = 'UPDATE SCHEDULE';
   showStatus('broadcastStatus','info','Editing this scheduled broadcast \u2014 make your changes and tap UPDATE SCHEDULE.');
   el('broadcastCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  // Without this, the size indicator kept showing whatever it displayed
+  // before this schedule was loaded (e.g. 0.00MB from an empty editor),
+  // since nothing here ever recalculated it after swapping in the
+  // schedule's actual saved content. That stale, falsely-small reading
+  // is exactly what let an oversized message (one saved before the
+  // paste/drop compression fix existed) pass the pre-send size check
+  // and fail as a raw "Load failed" network error instead of a clear,
+  // actionable size warning.
+  await updateSizeIndicator();
 }
 
 /* ============================================================
@@ -3833,6 +3842,11 @@ function loadDraftIntoEditor(draft){
   el('bcSendBtn').textContent = 'SEND BROADCAST';
   showStatus('broadcastStatus','info','Draft loaded \u2014 continue editing, then send, schedule, or save again.');
   el('broadcastCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  // Same fix as loadScheduleIntoEditor — without recalculating here, the
+  // size indicator keeps showing whatever it displayed before this
+  // draft was loaded, which could be a stale, falsely-small reading
+  // that lets an oversized saved draft pass the pre-send size check.
+  updateSizeIndicator();
 }
 
 /* ============================================================
@@ -4168,7 +4182,19 @@ async function runScheduleBroadcast(recipients, subject, body, useTemplate, sche
     }
     await refreshScheduledBroadcastsList();
   }catch(err){
-    showStatus('broadcastStatus','error','Could not schedule: ' + err.message);
+    // "Load failed" (and similar raw browser fetch errors like "Failed
+    // to fetch" or "NetworkError") almost always means the request
+    // itself couldn't complete — most commonly because the payload
+    // (message + images + attachments) was too large to send over the
+    // network, before it ever reached the size checks on the server.
+    // A bare browser error string here would be confusing, so this
+    // translates the common case into the same actionable guidance the
+    // size checks elsewhere already give.
+    const isLikelyNetworkFailure = /load failed|failed to fetch|network ?error/i.test(err.message || '');
+    const message = isLikelyNetworkFailure
+      ? 'This message could not be sent to the server \u2014 it\u2019s likely too large. Try removing an inline image or attachment, or turn off "Use header & footer template", then try again.'
+      : 'Could not schedule: ' + err.message;
+    showStatus('broadcastStatus','error', message);
   }finally{
     el('bcSendBtn').disabled = false;
     el('bcPreviewBtn').disabled = false;
@@ -4223,8 +4249,12 @@ async function runBroadcastSend(recipients, subject, body, useTemplate){
     }
     showStatus('broadcastStatus', totalFailed > 0 ? 'error' : 'success', msg);
   }catch(err){
+    const isLikelyNetworkFailure = /load failed|failed to fetch|network ?error/i.test(err.message || '');
+    const reason = isLikelyNetworkFailure
+      ? 'the message is likely too large \u2014 try removing an inline image or attachment, or turn off "Use header & footer template"'
+      : 'Error: ' + err.message;
     showStatus('broadcastStatus','error',
-      'Stopped after ' + totalSent + ' of ' + rows.length + ' sent (already delivered \u2014 safe to retry, but it will resend to everyone in this selection since broadcasts don\u2019t track who already got it). Error: ' + err.message
+      'Stopped after ' + totalSent + ' of ' + rows.length + ' sent (already delivered \u2014 safe to retry, but it will resend to everyone in this selection since broadcasts don\u2019t track who already got it). ' + reason
     );
   }finally{
     el('bcSendBtn').disabled = false;
