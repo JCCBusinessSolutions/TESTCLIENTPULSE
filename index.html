@@ -3980,6 +3980,72 @@ async function updateSizeIndicator(){
 // fetch time and could report a stale, falsely-small size).
 el('broadcastEditor').addEventListener('input', () => updateSizeIndicator());
 
+// Images inserted via the toolbar's Image button always go through
+// resizeImageForUpload() and come out compressed — but a person can
+// also paste an image directly into the editor (copied from another
+// app, a screenshot, another part of this same page, etc.), and
+// browsers insert pasted images as raw, uncompressed base64 data with
+// no compression at all. That gap is exactly what let a broadcast with
+// a normal-looking "Message size: ~0.3MB" indicator still fail to send
+// as "too large" — the pasted image's real size was never counted
+// because it never passed through any of this app's own image-handling
+// code. Intercepting the paste event and routing any pasted image
+// through the same compression pipeline closes that gap at the source.
+el('broadcastEditor').addEventListener('paste', async (e) => {
+  const items = (e.clipboardData || window.clipboardData)?.items;
+  if (!items) return;
+  let imageFile = null;
+  for (const item of items){
+    if (item.type && item.type.startsWith('image/')){
+      imageFile = item.getAsFile();
+      break;
+    }
+  }
+  if (!imageFile) return; // no image in the paste — let the browser handle text normally
+  e.preventDefault(); // stop the browser's own raw, uncompressed insertion
+  try{
+    const resized = await resizeImageForUpload(imageFile, 1200, 0.88, 800 * 1024);
+    insertResizableImage('data:' + resized.mimeType + ';base64,' + resized.base64);
+    updateSizeIndicator();
+  }catch(err){
+    showStatus('broadcastStatus','error','Could not paste image: ' + err.message);
+  }
+});
+
+// Same gap as paste, via a different browser mechanism: dragging an
+// image file (from the desktop, another app, or another tab) directly
+// onto the editor also inserts it raw and uncompressed by default.
+el('broadcastEditor').addEventListener('dragover', (e) => { e.preventDefault(); });
+el('broadcastEditor').addEventListener('drop', async (e) => {
+  const files = e.dataTransfer?.files;
+  if (!files || files.length === 0) return;
+  const imageFile = Array.from(files).find(f => f.type && f.type.startsWith('image/'));
+  if (!imageFile) return;
+  e.preventDefault();
+  // A drop doesn't automatically focus the editor or place a cursor the
+  // way typing or pasting does, but insertResizableImage() relies on
+  // execCommand('insertHTML', ...) which needs an active selection
+  // inside a focused editable element — without this, the image would
+  // silently fail to insert at all. Focusing and moving the cursor to
+  // the end guarantees a valid insertion point regardless of exactly
+  // where in the editor the file was dropped.
+  const editor = el('broadcastEditor');
+  editor.focus();
+  const range = document.createRange();
+  range.selectNodeContents(editor);
+  range.collapse(false);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+  try{
+    const resized = await resizeImageForUpload(imageFile, 1200, 0.88, 800 * 1024);
+    insertResizableImage('data:' + resized.mimeType + ';base64,' + resized.base64);
+    updateSizeIndicator();
+  }catch(err){
+    showStatus('broadcastStatus','error','Could not add dropped image: ' + err.message);
+  }
+});
+
 el('bcSendBtn').addEventListener('click', async () => {
   const subject = el('broadcastSubject').value.trim();
   const body = stripEditorControls(el('broadcastEditor').innerHTML.trim());
