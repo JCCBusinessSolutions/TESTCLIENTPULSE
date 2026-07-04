@@ -2778,13 +2778,26 @@ function parseDuesFromWorkbook(workbook){
 async function callBackend(payload){
   const url = getScriptUrl();
   if (!url) throw new Error('NO_SCRIPT_URL');
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify(payload)
-  });
-  if (!res.ok) throw new Error('HTTP_' + res.status);
-  return res.json();
+  const bodyStr = JSON.stringify(payload);
+  try{
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: bodyStr
+    });
+    if (!res.ok) throw new Error('HTTP_' + res.status);
+    return res.json();
+  }catch(err){
+    // Diagnostic: when the request itself fails at the network level
+    // (e.g. "Load failed", "Failed to fetch"), attach the ACTUAL request
+    // body size in the error message. The frontend's own size estimate
+    // (calculateBroadcastSizeMB) has been unreliable for payloads loaded
+    // back from a saved schedule/draft, so this measures the real
+    // outgoing request directly instead of trusting that estimate.
+    const actualRequestMB = (new Blob([bodyStr]).size / (1024 * 1024)).toFixed(2);
+    err.message = err.message + ' (actual request size: ~' + actualRequestMB + 'MB)';
+    throw err;
+  }
 }
 
 // Splits a flat array into chunks of at most `size` items each.
