@@ -20,6 +20,13 @@ const BIRTHDAY_HEADERS = ['Full Name','Email','Contact Number','Location','Date 
 const SCHEDULE_SHEET_NAME = 'Scheduled Broadcasts';
 const SCHEDULE_HEADERS = ['Schedule ID','Scheduled For','Subject','PayloadJSON','TriggerId','Status','Created At','Sent At','Error'];
 
+// Broadcast Drafts: saved (not sent, not scheduled) messages an advisor
+// can come back to and finish later, or reuse as a starting point for
+// a future broadcast. Same PayloadJSON-in-a-sheet-cell pattern as
+// Scheduled Broadcasts, since the same size constraints apply.
+const DRAFT_SHEET_NAME = 'Broadcast Drafts';
+const DRAFT_HEADERS = ['Draft ID','Subject','PayloadJSON','Created At','Updated At'];
+
 const CONFIG_DEFAULTS = {
   senderName: '',
   contactEmail: '',
@@ -249,6 +256,19 @@ function setupScheduleSheet(){
   return sheet;
 }
 
+function setupDraftSheet(){
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(DRAFT_SHEET_NAME);
+  if (!sheet){
+    sheet = ss.insertSheet(DRAFT_SHEET_NAME);
+  }
+  if (sheet.getLastRow() === 0){
+    sheet.appendRow(DRAFT_HEADERS);
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
+}
+
 function getAutoSendStatus(){
   const val = PropertiesService.getScriptProperties().getProperty('AUTO_SEND_ENABLED');
   return { enabled: val === null ? true : val === '1' };
@@ -437,6 +457,7 @@ function doGet(e){
   if (action === 'getSendHour')               return jsonResponse(getSendHour());
   if (action === 'diagnoseTemplateSize')      return jsonResponse(diagnoseTemplateSize());
   if (action === 'getScheduledBroadcasts')    return jsonResponse({ schedules: getScheduledBroadcasts() });
+  if (action === 'getDrafts')                 return jsonResponse({ drafts: getDrafts() });
   return jsonResponse({ error: 'Unknown action' });
 }
 
@@ -506,6 +527,11 @@ function doPost(e){
   if (body.action === 'scheduleBroadcast')      { try{ return jsonResponse(scheduleBroadcast(body.scheduledFor, body.payload)); }catch(err){ return jsonResponse({ success: false, error: toEnglishErrorMessage(err.message) }); } }
   if (body.action === 'cancelScheduledBroadcast') { try{ return jsonResponse(cancelScheduledBroadcast(body.scheduleId)); }catch(err){ return jsonResponse({ success: false, error: toEnglishErrorMessage(err.message) }); } }
   if (body.action === 'getScheduledBroadcasts') { try{ return jsonResponse({ schedules: getScheduledBroadcasts() }); }catch(err){ return jsonResponse({ success: false, error: toEnglishErrorMessage(err.message) }); } }
+  if (body.action === 'editScheduledBroadcast') { try{ return jsonResponse(editScheduledBroadcast(body.scheduleId, body.scheduledFor, body.payload)); }catch(err){ return jsonResponse({ success: false, error: toEnglishErrorMessage(err.message) }); } }
+  if (body.action === 'getScheduledBroadcastPayload') { try{ return jsonResponse(getScheduledBroadcastPayload(body.scheduleId)); }catch(err){ return jsonResponse({ success: false, error: toEnglishErrorMessage(err.message) }); } }
+  if (body.action === 'saveDraft')              { try{ return jsonResponse(saveDraft(body.draftId, body.payload)); }catch(err){ return jsonResponse({ success: false, error: toEnglishErrorMessage(err.message) }); } }
+  if (body.action === 'getDrafts')              { try{ return jsonResponse({ drafts: getDrafts() }); }catch(err){ return jsonResponse({ success: false, error: toEnglishErrorMessage(err.message) }); } }
+  if (body.action === 'deleteDraft')            { try{ return jsonResponse(deleteDraft(body.draftId)); }catch(err){ return jsonResponse({ success: false, error: toEnglishErrorMessage(err.message) }); } }
 
   return jsonResponse({ error: 'Unknown action' });
 }
@@ -977,17 +1003,44 @@ function sendBroadcastEmailBatch(rows, subject, htmlBody, attachments, useTempla
   // large. Without this check, every single recipient in the batch
   // fails one-by-one with the same size error, which wastes the whole
   // send attempt; this fails once, immediately, with one clear fix.
+  let templateMB = 0;
   if (useTemplate){
     const headerBytes = DriveApp.getFileById(config.headerImageFileId).getBlob().getBytes().length;
     const footerBytes = DriveApp.getFileById(config.footerImageFileId).getBlob().getBytes().length;
-    const templateMB = (headerBytes + footerBytes) / (1024 * 1024);
-    if (templateMB > 2){
-      throw new Error(
-        'Your saved header/footer photos are too large (~' + templateMB.toFixed(1) + 'MB combined) to embed in every email of this broadcast. ' +
-        'Go to Settings \u2192 Branding Studio and re-upload your header and footer photos \u2014 they\u2019ll now be compressed automatically to a safe size. ' +
-        'Or turn off "Use header & footer template" for this broadcast and send without it.'
-      );
-    }
+    templateMB = (headerBytes + footerBytes) / (1024 * 1024);
+  }
+
+  // The size check above only ever covered the header/footer template —
+  // it completely missed images inserted directly into the message body
+  // via the editor's own Image button, which get embedded as base64
+  // data URLs right inside htmlBody itself. That gap is exactly what
+  // let an oversized broadcast (body image + header + footer combined)
+  // slip past every prior check and fail silently for every recipient.
+  // This measures the real total: htmlBody's own length (which already
+  // includes any inline base64 images baked into it) plus attachments
+  // plus the template photos, all as they'll actually be transmitted.
+  const htmlBodyBytes = Utilities.newBlob(String(htmlBody || '')).getBytes().length;
+  const attachmentBytesTotal = (attachments || []).reduce((sum, a) => sum + Math.ceil((a.base64 || '').length * 0.75), 0);
+  const totalMB = (htmlBodyBytes / (1024 * 1024)) + templateMB + (attachmentBytesTotal / (1024 * 1024));
+  // 6MB is a deliberately conservative safety margin — Google's own
+  // documentation notes the email body/header size and the attachments
+  // size are quota-limited *separately*, and the exact numbers aren't
+  // publicly documented in a way that lets this be calculated exactly.
+  // A broadcast that measured ~7.5MB under the old 8MB threshold still
+  // failed to actually send in practice, so this is intentionally
+  // tighter than what the raw math alone would suggest is safe.
+  if (totalMB > 6){
+    throw new Error(
+      'This message is too large (~' + totalMB.toFixed(1) + 'MB total, including any inserted photos, the header/footer template, and attachments) to send reliably. ' +
+      'Remove an inline image or attachment, or turn off "Use header & footer template", then try again.'
+    );
+  }
+  if (useTemplate && templateMB > 2){
+    throw new Error(
+      'Your saved header/footer photos are too large (~' + templateMB.toFixed(1) + 'MB combined) to embed in every email of this broadcast. ' +
+      'Go to Settings \u2192 Branding Studio and re-upload your header and footer photos \u2014 they\u2019ll now be compressed automatically to a safe size. ' +
+      'Or turn off "Use header & footer template" for this broadcast and send without it.'
+    );
   }
 
   const blobs = (attachments || []).map(a => {
@@ -1152,11 +1205,24 @@ function runScheduledBroadcastTrigger(e){
       payload.attachments || [],
       payload.useTemplate
     );
-    sheet.getRange(rowNum, col('Status') + 1).setValue('sent');
+    // "sent" only means every intended recipient actually received it —
+    // 0 sent with 1+ failed is a real failure, not a success with some
+    // stragglers, so the status should say so plainly rather than
+    // showing "sent" next to an error that contradicts it.
+    const allFailed = result.sent === 0 && result.failed > 0;
+    sheet.getRange(rowNum, col('Status') + 1).setValue(allFailed ? 'failed' : 'sent');
     sheet.getRange(rowNum, col('Sent At') + 1).setValue(new Date());
-    sheet.getRange(rowNum, col('Error') + 1).setValue(
-      result.failed > 0 ? (result.sent + ' sent, ' + result.failed + ' failed') : ''
-    );
+    // Log the ACTUAL reason(s) each recipient failed, not just a count —
+    // a bare "0 sent, 1 failed" gives no way to diagnose what went
+    // wrong. failureReasons already carries this detail per-recipient;
+    // this just surfaces it instead of discarding it.
+    let errorDetail = '';
+    if (result.failed > 0 && result.failureReasons && result.failureReasons.length > 0){
+      errorDetail = result.failureReasons.map(fr => fr.email + ': ' + fr.reason).join(' | ');
+    } else if (result.failed > 0){
+      errorDetail = result.sent + ' sent, ' + result.failed + ' failed';
+    }
+    sheet.getRange(rowNum, col('Error') + 1).setValue(errorDetail);
   }catch(err){
     // Per the advisor's own instruction: if anything is missing or
     // broken by the time this fires (recipient list changed, Setup URL
@@ -1192,6 +1258,23 @@ function getScheduledBroadcasts(){
   return result;
 }
 
+// getScheduledBroadcasts() intentionally omits PayloadJSON (recipient
+// lists and attachments can be large, and the list view never needs
+// them) — this fetches the full payload for exactly one schedule,
+// used only when the advisor opens a queued broadcast to edit it.
+function getScheduledBroadcastPayload(scheduleId){
+  const sheet = setupScheduleSheet();
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+  const col = name => headers.indexOf(name);
+  for (let i = 1; i < data.length; i++){
+    if (String(data[i][col('Schedule ID')]) === String(scheduleId)){
+      return { payload: JSON.parse(data[i][col('PayloadJSON')] || '{}') };
+    }
+  }
+  return { payload: null };
+}
+
 // Deletes the underlying trigger (so it can never fire) and marks the
 // row cancelled rather than deleting it outright, so there's still a
 // record of what was scheduled and cancelled.
@@ -1214,6 +1297,148 @@ function cancelScheduledBroadcast(scheduleId){
     }
   }
   return { success: false, error: 'Schedule not found.' };
+}
+
+// Edits an already-queued scheduled broadcast — the message, recipients,
+// attachments, template flag, and/or the send time itself, all before
+// it fires. Only works while status is still 'scheduled' (a broadcast
+// that already sent, failed, or was cancelled can't be edited back into
+// existence — start a new one instead).
+//
+// If scheduledFor is provided and differs from the stored time, the old
+// one-time trigger is deleted and a new one created at the new time —
+// Apps Script triggers have no "reschedule" operation, only delete and
+// recreate. If scheduledFor is omitted, only the payload changes and
+// the existing trigger/time are left untouched.
+function editScheduledBroadcast(scheduleId, scheduledFor, payload){
+  const sheet = setupScheduleSheet();
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+  const col = name => headers.indexOf(name);
+
+  let rowIndex = -1;
+  for (let i = 1; i < data.length; i++){
+    if (String(data[i][col('Schedule ID')]) === String(scheduleId)){
+      rowIndex = i;
+      break;
+    }
+  }
+  if (rowIndex === -1){
+    return { success: false, error: 'Schedule not found.' };
+  }
+  const rowNum = rowIndex + 1;
+  const currentStatus = data[rowIndex][col('Status')];
+  if (currentStatus !== 'scheduled'){
+    return { success: false, error: 'This broadcast already ' + currentStatus + ' and can no longer be edited.' };
+  }
+
+  let newTriggerId = data[rowIndex][col('TriggerId')];
+  if (scheduledFor){
+    const newDate = new Date(scheduledFor);
+    if (isNaN(newDate.getTime())){
+      return { success: false, error: 'Invalid scheduled date/time.' };
+    }
+    if (newDate.getTime() <= Date.now()){
+      return { success: false, error: 'Scheduled time must be in the future.' };
+    }
+    const oldTriggerId = data[rowIndex][col('TriggerId')];
+    if (oldTriggerId){
+      ScriptApp.getProjectTriggers().forEach(t => {
+        if (t.getUniqueId() === oldTriggerId) ScriptApp.deleteTrigger(t);
+      });
+    }
+    const newTrigger = ScriptApp.newTrigger('runScheduledBroadcastTrigger')
+      .timeBased()
+      .at(newDate)
+      .create();
+    newTriggerId = newTrigger.getUniqueId();
+    sheet.getRange(rowNum, col('Scheduled For') + 1).setValue(newDate);
+    sheet.getRange(rowNum, col('TriggerId') + 1).setValue(newTriggerId);
+  }
+
+  if (payload){
+    sheet.getRange(rowNum, col('Subject') + 1).setValue(payload.subject || '');
+    sheet.getRange(rowNum, col('PayloadJSON') + 1).setValue(JSON.stringify(payload));
+  }
+
+  return { success: true };
+}
+
+/* ============================================================
+   BROADCAST DRAFTS — lets an advisor save a message (subject,
+   body, recipients, attachments, template flag) without sending
+   or scheduling it, to finish later or reuse as a starting
+   point. Unlike Scheduled Broadcasts, drafts never trigger
+   anything on their own — they just sit until explicitly opened,
+   edited, or deleted. Same PayloadJSON-in-a-cell pattern, for
+   the same reason (attachments/images are too big for
+   PropertiesService's 9KB-per-value limit).
+   ============================================================ */
+
+// Creates a new draft if draftId is omitted, or overwrites an existing
+// one if provided — lets "Save Draft" double as "update this draft"
+// once the advisor has saved it once and keeps editing.
+function saveDraft(draftId, payload){
+  const sheet = setupDraftSheet();
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+  const col = name => headers.indexOf(name);
+  const payloadJson = JSON.stringify(payload || {});
+  const now = new Date();
+
+  if (draftId){
+    for (let i = 1; i < data.length; i++){
+      if (String(data[i][col('Draft ID')]) === String(draftId)){
+        sheet.getRange(i + 1, col('Subject') + 1).setValue(payload && payload.subject || '');
+        sheet.getRange(i + 1, col('PayloadJSON') + 1).setValue(payloadJson);
+        sheet.getRange(i + 1, col('Updated At') + 1).setValue(now);
+        return { success: true, draftId: draftId };
+      }
+    }
+    // draftId was provided but not found (e.g. it was deleted elsewhere) —
+    // fall through and create a fresh one instead of silently failing.
+  }
+
+  const newDraftId = Utilities.getUuid();
+  sheet.appendRow([newDraftId, payload && payload.subject || '', payloadJson, now, now]);
+  return { success: true, draftId: newDraftId };
+}
+
+// Lists all saved drafts, most recently updated first, for display in
+// the Broadcast Email UI so the advisor can pick one up where they
+// left off.
+function getDrafts(){
+  const sheet = setupDraftSheet();
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+  const col = name => headers.indexOf(name);
+  const result = [];
+  for (let i = 1; i < data.length; i++){
+    const row = data[i];
+    result.push({
+      draftId: row[col('Draft ID')],
+      subject: row[col('Subject')],
+      payload: JSON.parse(row[col('PayloadJSON')] || '{}'),
+      createdAt: row[col('Created At')] instanceof Date ? row[col('Created At')].toISOString() : String(row[col('Created At')]),
+      updatedAt: row[col('Updated At')] instanceof Date ? row[col('Updated At')].toISOString() : String(row[col('Updated At')])
+    });
+  }
+  result.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+  return result;
+}
+
+function deleteDraft(draftId){
+  const sheet = setupDraftSheet();
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+  const col = name => headers.indexOf(name);
+  for (let i = 1; i < data.length; i++){
+    if (String(data[i][col('Draft ID')]) === String(draftId)){
+      sheet.deleteRow(i + 1);
+      return { success: true };
+    }
+  }
+  return { success: false, error: 'Draft not found.' };
 }
 
 // GmailApp.sendEmail() (and other Google services) return error messages
