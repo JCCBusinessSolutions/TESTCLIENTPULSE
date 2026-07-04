@@ -11,6 +11,15 @@ const HEADERS = ['Policy Number','Client Name','Email','Product','Premium Mode',
 const BIRTHDAY_SHEET_NAME = 'Birthday Tracker';
 const BIRTHDAY_HEADERS = ['Full Name','Email','Contact Number','Location','Date of Birth','Last Greeting Sent (Year)','Send Birthday?'];
 
+// Scheduled broadcasts: each row is one queued send. The full payload
+// (subject, body, recipients, attachments, template flag) is stored as
+// a JSON string in PayloadJSON, since PropertiesService's 9KB-per-value
+// limit is too small once inline images/attachments are included —
+// Sheet cells comfortably hold much larger text. TriggerId lets a
+// scheduled send be cancelled later by deleting its specific trigger.
+const SCHEDULE_SHEET_NAME = 'Scheduled Broadcasts';
+const SCHEDULE_HEADERS = ['Schedule ID','Scheduled For','Subject','PayloadJSON','TriggerId','Status','Created At','Sent At','Error'];
+
 const CONFIG_DEFAULTS = {
   senderName: '',
   contactEmail: '',
@@ -28,6 +37,51 @@ function getBrandConfig(){
     config[key] = props.getProperty('CFG_' + key) || CONFIG_DEFAULTS[key];
   });
   return config;
+}
+
+// DIAGNOSTIC ONLY \u2014 checks the real, current size of the saved header
+// and footer images in Drive, plus what the broadcast template size
+// guard would calculate. Run this directly from the Apps Script editor
+// (select this function in the dropdown, click Run) to see the actual
+// numbers, or call it via ?action=diagnoseTemplateSize in a browser.
+function diagnoseTemplateSize(){
+  const config = getBrandConfig();
+  const result = { headerImageFileId: config.headerImageFileId, footerImageFileId: config.footerImageFileId };
+
+  if (!config.headerImageFileId){
+    result.error = 'No headerImageFileId saved in config \u2014 header photo was never uploaded, or config is empty.';
+    return result;
+  }
+  if (!config.footerImageFileId){
+    result.error = 'No footerImageFileId saved in config \u2014 footer photo was never uploaded, or config is empty.';
+    return result;
+  }
+
+  try{
+    const headerBlob = DriveApp.getFileById(config.headerImageFileId).getBlob();
+    result.headerBytes = headerBlob.getBytes().length;
+    result.headerMB = (result.headerBytes / (1024 * 1024)).toFixed(2);
+    result.headerMimeType = headerBlob.getContentType();
+  }catch(e){
+    result.headerError = 'Could not read header file: ' + e.message;
+  }
+
+  try{
+    const footerBlob = DriveApp.getFileById(config.footerImageFileId).getBlob();
+    result.footerBytes = footerBlob.getBytes().length;
+    result.footerMB = (result.footerBytes / (1024 * 1024)).toFixed(2);
+    result.footerMimeType = footerBlob.getContentType();
+  }catch(e){
+    result.footerError = 'Could not read footer file: ' + e.message;
+  }
+
+  if (result.headerBytes !== undefined && result.footerBytes !== undefined){
+    const combinedMB = (result.headerBytes + result.footerBytes) / (1024 * 1024);
+    result.combinedMB = combinedMB.toFixed(2);
+    result.wouldBeBlockedByOurCheck = combinedMB > 2;
+  }
+
+  return result;
 }
 
 function saveBrandConfig(partialConfig){
@@ -180,6 +234,19 @@ function setupBirthdaySheet(){
       }
     }
   }
+}
+
+function setupScheduleSheet(){
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  let sheet = ss.getSheetByName(SCHEDULE_SHEET_NAME);
+  if (!sheet){
+    sheet = ss.insertSheet(SCHEDULE_SHEET_NAME);
+  }
+  if (sheet.getLastRow() === 0){
+    sheet.appendRow(SCHEDULE_HEADERS);
+    sheet.setFrozenRows(1);
+  }
+  return sheet;
 }
 
 function getAutoSendStatus(){
@@ -368,6 +435,8 @@ function doGet(e){
   if (action === 'getBirthdayDailyStats')     return jsonResponse(getBirthdayDailyStats());
   if (action === 'getBirthdayAutoSendStatus') return jsonResponse(getBirthdayAutoSendStatus());
   if (action === 'getSendHour')               return jsonResponse(getSendHour());
+  if (action === 'diagnoseTemplateSize')      return jsonResponse(diagnoseTemplateSize());
+  if (action === 'getScheduledBroadcasts')    return jsonResponse({ schedules: getScheduledBroadcasts() });
   return jsonResponse({ error: 'Unknown action' });
 }
 
@@ -431,9 +500,12 @@ function doPost(e){
   if (body.action === 'pushBirthdays')          { const result = pushBirthdayRows(body.rows || []); return jsonResponse(Object.assign({ success: true }, result)); }
   if (body.action === 'setBirthdayAutoSendStatus') { setBirthdayAutoSendStatus(!!body.enabled); return jsonResponse({ success: true }); }
   if (body.action === 'setSendHour')            { const result = setSendHour(body.hour); return jsonResponse(Object.assign({ success: true }, result)); }
-  if (body.action === 'sendDuesTestEmail')      { try{ return jsonResponse(sendDuesTestEmailToSelf()); }catch(err){ return jsonResponse({ success: false, error: err.message }); } }
-  if (body.action === 'sendBirthdayTestEmail')  { try{ return jsonResponse(sendBirthdayTestEmailToSelf()); }catch(err){ return jsonResponse({ success: false, error: err.message }); } }
-  if (body.action === 'sendBroadcastBatch')     { try{ return jsonResponse(Object.assign({ success: true }, sendBroadcastEmailBatch(body.rows || [], body.subject || '', body.htmlBody || '', body.attachments || []))); }catch(err){ return jsonResponse({ success: false, error: err.message }); } }
+  if (body.action === 'sendDuesTestEmail')      { try{ return jsonResponse(sendDuesTestEmailToSelf()); }catch(err){ return jsonResponse({ success: false, error: toEnglishErrorMessage(err.message) }); } }
+  if (body.action === 'sendBirthdayTestEmail')  { try{ return jsonResponse(sendBirthdayTestEmailToSelf()); }catch(err){ return jsonResponse({ success: false, error: toEnglishErrorMessage(err.message) }); } }
+  if (body.action === 'sendBroadcastBatch')     { try{ return jsonResponse(Object.assign({ success: true }, sendBroadcastEmailBatch(body.rows || [], body.subject || '', body.htmlBody || '', body.attachments || [], body.useTemplate))); }catch(err){ return jsonResponse({ success: false, error: toEnglishErrorMessage(err.message) }); } }
+  if (body.action === 'scheduleBroadcast')      { try{ return jsonResponse(scheduleBroadcast(body.scheduledFor, body.payload)); }catch(err){ return jsonResponse({ success: false, error: toEnglishErrorMessage(err.message) }); } }
+  if (body.action === 'cancelScheduledBroadcast') { try{ return jsonResponse(cancelScheduledBroadcast(body.scheduleId)); }catch(err){ return jsonResponse({ success: false, error: toEnglishErrorMessage(err.message) }); } }
+  if (body.action === 'getScheduledBroadcasts') { try{ return jsonResponse({ schedules: getScheduledBroadcasts() }); }catch(err){ return jsonResponse({ success: false, error: toEnglishErrorMessage(err.message) }); } }
 
   return jsonResponse({ error: 'Unknown action' });
 }
@@ -870,28 +942,94 @@ function sendBirthdayEmail(row, col){
 // rows: array of { email, clientName } for one batch
 // htmlBody: may contain the literal text "{FirstName}" which gets
 // replaced per-recipient before sending.
-function sendBroadcastEmailBatch(rows, subject, htmlBody, attachments){
+// useTemplate: when true, wraps htmlBody with the same header/footer
+// images used by dues reminders and birthday greetings, via cid:
+// references + inlineImages — this is the reliable method real email
+// clients render correctly, unlike data-URL images which many inboxes
+// (including Gmail's own web client in some cases) strip or block.
+function sendBroadcastEmailBatch(rows, subject, htmlBody, attachments, useTemplate){
   const config = getBrandConfig();
-  assertConfigured(config);
+  // Broadcast Email only strictly needs a sender name — header/footer
+  // photos are optional here (unlike dues reminders and birthday
+  // greetings, which always embed them). Requiring them unconditionally
+  // was blocking every broadcast for any advisor who hadn't set up a
+  // header/footer yet, even when the "Use header & footer template"
+  // toggle was off and no template was going to be embedded at all —
+  // this was the actual cause of broadcasts failing to send regardless
+  // of message size.
+  if (!config.senderName){
+    throw new Error(
+      'Branding not set up yet. Open the app, tap "Setup", fill in ' +
+      '"Your branding" (missing: senderName), and tap SAVE BRANDING before broadcasts can be sent.'
+    );
+  }
+  if (useTemplate && (!config.headerImageFileId || !config.footerImageFileId)){
+    throw new Error(
+      'You turned on "Use header & footer template" but haven\u2019t saved both a header and footer photo yet. ' +
+      'Go to Settings \u2192 Branding Studio to add them, or turn the template toggle off to send without it.'
+    );
+  }
+
+  // Check the ACTUAL stored header/footer file sizes before attempting
+  // anything. Client-side compression only affects newly-uploaded
+  // photos going forward — an advisor's existing header/footer (saved
+  // before this fix, or re-saved via an older code path) can still be
+  // large. Without this check, every single recipient in the batch
+  // fails one-by-one with the same size error, which wastes the whole
+  // send attempt; this fails once, immediately, with one clear fix.
+  if (useTemplate){
+    const headerBytes = DriveApp.getFileById(config.headerImageFileId).getBlob().getBytes().length;
+    const footerBytes = DriveApp.getFileById(config.footerImageFileId).getBlob().getBytes().length;
+    const templateMB = (headerBytes + footerBytes) / (1024 * 1024);
+    if (templateMB > 2){
+      throw new Error(
+        'Your saved header/footer photos are too large (~' + templateMB.toFixed(1) + 'MB combined) to embed in every email of this broadcast. ' +
+        'Go to Settings \u2192 Branding Studio and re-upload your header and footer photos \u2014 they\u2019ll now be compressed automatically to a safe size. ' +
+        'Or turn off "Use header & footer template" for this broadcast and send without it.'
+      );
+    }
+  }
 
   const blobs = (attachments || []).map(a => {
     const bytes = Utilities.base64Decode(a.base64);
     return Utilities.newBlob(bytes, a.mimeType || 'application/octet-stream', a.filename || 'attachment');
   });
 
+  const wrappedBody = useTemplate
+    ? '<div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;border:1px solid #E7DFCF;border-radius:10px;overflow:hidden;">'
+      + '<img src="cid:headerImg" alt="Header" style="width:100%;display:block;">'
+      + '<div style="padding:24px;background:#FDF8F0;color:#1C2A38;">' + String(htmlBody || '') + '</div>'
+      + '<img src="cid:footerImg" alt="Footer" style="width:100%;display:block;">'
+      + '</div>'
+    : String(htmlBody || '');
+
   let sent = 0, failed = 0;
   const failedEmails = [];
+  const failureReasons = []; // { email, reason } — surfaced to the frontend so
+                              // "1 failed" isn't a dead end with no explanation
 
   rows.forEach(r => {
-    if (!r.email) { failed++; return; }
+    if (!r.email) {
+      failed++;
+      failureReasons.push({ email: '(blank)', reason: 'No email address on file for this client.' });
+      return;
+    }
     try{
       const firstName = firstNameOnly(r.clientName) || 'there';
-      const personalizedBody = String(htmlBody || '').split('{FirstName}').join(firstName);
+      // Bold + black so the personalized greeting stands out regardless
+      // of whatever color the surrounding message text uses.
+      const styledFirstName = '<span style="font-weight:700;color:#000000;">' + firstName + '</span>';
+      // Case-insensitive match: {FirstName}, {firstName}, {FIRSTNAME},
+      // {firstname} all work \u2014 typing the exact capitalization
+      // correctly shouldn't be a requirement for personalization to
+      // actually apply.
+      const personalizedBody = wrappedBody.replace(/\{firstname\}/gi, styledFirstName);
 
       const options = {
         htmlBody: personalizedBody,
         name: config.senderName,
       };
+      if (useTemplate) options.inlineImages = getEmailImages(config);
       if (blobs.length > 0) options.attachments = blobs;
       if (config.contactEmail){
         options.cc = config.contactEmail;
@@ -902,10 +1040,210 @@ function sendBroadcastEmailBatch(rows, subject, htmlBody, attachments){
     }catch(err){
       failed++;
       failedEmails.push(r.email);
+      failureReasons.push({ email: r.email, reason: toEnglishErrorMessage(err.message || String(err)) });
     }
   });
 
-  return { sent: sent, failed: failed, failedEmails: failedEmails, total: rows.length };
+  return { sent: sent, failed: failed, failedEmails: failedEmails, failureReasons: failureReasons, total: rows.length };
+}
+
+/* ============================================================
+   SCHEDULED BROADCASTS — lets an advisor queue a broadcast to
+   send at a specific future date/time instead of immediately.
+   Each schedule gets its own one-time Apps Script trigger
+   (ScriptApp...at(specificDateTime)) that fires
+   sendScheduledBroadcast() at exactly that moment. The full
+   payload (subject, body, recipients, attachments, template
+   flag) is stored as JSON in the Scheduled Broadcasts sheet —
+   PropertiesService's 9KB-per-value limit is too small once
+   inline images/attachments are included, but a sheet cell
+   comfortably holds far more. Multiple schedules can be queued
+   at once, each with its own row and its own trigger, entirely
+   independent of one another.
+   ============================================================ */
+
+// scheduledFor: ISO datetime string for when this should send.
+// payload: { rows, subject, htmlBody, attachments, useTemplate } —
+// exactly the same shape sendBroadcastEmailBatch already accepts,
+// just captured now and replayed later at the scheduled time.
+function scheduleBroadcast(scheduledFor, payload){
+  const scheduledDate = new Date(scheduledFor);
+  if (isNaN(scheduledDate.getTime())){
+    throw new Error('Invalid scheduled date/time.');
+  }
+  if (scheduledDate.getTime() <= Date.now()){
+    throw new Error('Scheduled time must be in the future.');
+  }
+
+  const sheet = setupScheduleSheet();
+  const scheduleId = Utilities.getUuid();
+  const payloadJson = JSON.stringify(payload || {});
+
+  // One-time trigger, distinct from the recurring daily triggers used
+  // elsewhere — this fires exactly once, at exactly this timestamp.
+  const trigger = ScriptApp.newTrigger('runScheduledBroadcastTrigger')
+    .timeBased()
+    .at(scheduledDate)
+    .create();
+  const triggerId = trigger.getUniqueId();
+
+  // The trigger only knows to call runScheduledBroadcastTrigger() with
+  // no arguments (Apps Script time triggers can't carry custom
+  // parameters), so the scheduleId has to be recoverable some other
+  // way — storing triggerId alongside the row lets the trigger handler
+  // look up "which row was I created for" when it fires.
+  sheet.appendRow([
+    scheduleId,
+    scheduledDate,
+    payload && payload.subject || '',
+    payloadJson,
+    triggerId,
+    'scheduled',
+    new Date(),
+    '',
+    ''
+  ]);
+
+  return { success: true, scheduleId: scheduleId, scheduledFor: scheduledDate.toISOString() };
+}
+
+// The actual function every scheduled trigger calls. Since Apps Script
+// time-based triggers can't pass custom data, this looks itself up by
+// matching the trigger's own unique ID against the TriggerId column —
+// whichever row matches is the schedule that just came due.
+function runScheduledBroadcastTrigger(e){
+  const triggerId = e && e.triggerUid ? e.triggerUid : null;
+  const sheet = setupScheduleSheet();
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+  const col = name => headers.indexOf(name);
+
+  let rowIndex = -1;
+  for (let i = 1; i < data.length; i++){
+    if (triggerId && String(data[i][col('TriggerId')]) === String(triggerId)){
+      rowIndex = i;
+      break;
+    }
+  }
+
+  // Always clean up the one-time trigger regardless of outcome below —
+  // it has already fired and will never fire again, so leaving it
+  // registered only clutters the project's trigger list.
+  if (triggerId){
+    ScriptApp.getProjectTriggers().forEach(t => {
+      if (t.getUniqueId() === triggerId) ScriptApp.deleteTrigger(t);
+    });
+  }
+
+  if (rowIndex === -1) return; // no matching row found — nothing to do
+
+  const rowNum = rowIndex + 1;
+  const status = data[rowIndex][col('Status')];
+  if (status === 'cancelled'){
+    return; // person cancelled it before it fired — do nothing
+  }
+
+  try{
+    const payload = JSON.parse(data[rowIndex][col('PayloadJSON')] || '{}');
+    const result = sendBroadcastEmailBatch(
+      payload.rows || [],
+      payload.subject || '',
+      payload.htmlBody || '',
+      payload.attachments || [],
+      payload.useTemplate
+    );
+    sheet.getRange(rowNum, col('Status') + 1).setValue('sent');
+    sheet.getRange(rowNum, col('Sent At') + 1).setValue(new Date());
+    sheet.getRange(rowNum, col('Error') + 1).setValue(
+      result.failed > 0 ? (result.sent + ' sent, ' + result.failed + ' failed') : ''
+    );
+  }catch(err){
+    // Per the advisor's own instruction: if anything is missing or
+    // broken by the time this fires (recipient list changed, Setup URL
+    // gone, branding incomplete), skip silently and just log the
+    // error in the sheet — no additional notification.
+    sheet.getRange(rowNum, col('Status') + 1).setValue('failed');
+    sheet.getRange(rowNum, col('Error') + 1).setValue(toEnglishErrorMessage(err.message || String(err)));
+  }
+}
+
+// Lists all non-cancelled schedules, most recently created first, for
+// display in the Broadcast Email UI so the advisor can see what's
+// queued and cancel anything before it fires.
+function getScheduledBroadcasts(){
+  const sheet = setupScheduleSheet();
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+  const col = name => headers.indexOf(name);
+  const result = [];
+  for (let i = 1; i < data.length; i++){
+    const row = data[i];
+    result.push({
+      scheduleId: row[col('Schedule ID')],
+      scheduledFor: row[col('Scheduled For')] instanceof Date ? row[col('Scheduled For')].toISOString() : String(row[col('Scheduled For')]),
+      subject: row[col('Subject')],
+      status: row[col('Status')],
+      createdAt: row[col('Created At')] instanceof Date ? row[col('Created At')].toISOString() : String(row[col('Created At')]),
+      sentAt: row[col('Sent At')] instanceof Date ? row[col('Sent At')].toISOString() : String(row[col('Sent At')] || ''),
+      error: row[col('Error')] || ''
+    });
+  }
+  result.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  return result;
+}
+
+// Deletes the underlying trigger (so it can never fire) and marks the
+// row cancelled rather than deleting it outright, so there's still a
+// record of what was scheduled and cancelled.
+function cancelScheduledBroadcast(scheduleId){
+  const sheet = setupScheduleSheet();
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+  const col = name => headers.indexOf(name);
+
+  for (let i = 1; i < data.length; i++){
+    if (String(data[i][col('Schedule ID')]) === String(scheduleId)){
+      const triggerId = data[i][col('TriggerId')];
+      if (triggerId){
+        ScriptApp.getProjectTriggers().forEach(t => {
+          if (t.getUniqueId() === triggerId) ScriptApp.deleteTrigger(t);
+        });
+      }
+      sheet.getRange(i + 1, col('Status') + 1).setValue('cancelled');
+      return { success: true };
+    }
+  }
+  return { success: false, error: 'Schedule not found.' };
+}
+
+// GmailApp.sendEmail() (and other Google services) return error messages
+// in whatever language the deploying Google account's locale is set to —
+// not necessarily English, e.g. Tagalog: "Nalagpasan ang Limitasyon: Laki
+// ng Body ng E-mail". Since every message shown to the advisor must be
+// English, this recognizes the known Gmail error patterns we've actually
+// seen and maps them to a clean English equivalent. Anything unrecognized
+// falls through unchanged rather than being silently hidden — better to
+// show an unfamiliar-but-honest message than to guess wrong.
+function toEnglishErrorMessage(rawMessage){
+  const msg = String(rawMessage || '');
+  const patterns = [
+    { match: /Limitasyon.*Laki ng Body|Body.*[Ll]imit exceeded|Nalagpasan.*[Ll]imitasyon/i,
+      english: 'Email is too large to send \u2014 remove an inline image or attachment and try again.' },
+    { match: /Invalid email|[Mm]ali ang email|hindi wasto ang email/i,
+      english: 'Invalid email address.' },
+    { match: /quota|limitasyon.*araw|daily.*limit/i,
+      english: 'Daily sending limit reached for this Google account \u2014 try again tomorrow, or send in smaller batches.' },
+    { match: /Recipient address required|kinakailangan ang address/i,
+      english: 'Recipient address is missing or invalid.' },
+    { match: /rate limit|masyadong marami/i,
+      english: 'Sending too fast \u2014 please wait a moment and try again.' },
+  ];
+  for (const p of patterns){
+    if (p.match.test(msg)) return p.english;
+  }
+  // Unrecognized message: return as-is rather than hide it, so nothing
+  // gets silently swallowed if a new/unseen Gmail error shows up.
+  return msg;
 }
 
 function firstNameOnly(rawName){
