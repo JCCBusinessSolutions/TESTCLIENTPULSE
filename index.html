@@ -1694,7 +1694,14 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
         <input type="text" id="broadcastSubject" placeholder="e.g. A quick update from your advisor">
 
         <label style="margin-top:12px;">Message</label>
-        <div id="broadcastToolbar" style="display:flex; gap:4px; flex-wrap:wrap; margin:6px 0 8px; padding:8px; background:var(--cream,#FDF8F0); border:1px solid var(--line,#E4DCC8); border-radius:8px 8px 0 0;">
+        <div id="broadcastToolbar" style="display:flex; gap:4px; flex-wrap:wrap; align-items:center; margin:6px 0 8px; padding:8px; background:var(--cream,#FDF8F0); border:1px solid var(--line,#E4DCC8); border-radius:8px 8px 0 0;">
+          <select id="bcFontSizeSelect" title="Font size" style="flex:0 0 auto; width:auto; min-height:auto; padding:6px 8px; font-size:12px; font-weight:600; color:var(--navy,#0C447C); background:#fff; border:1px solid var(--line,#E4DCC8); border-radius:6px; cursor:pointer;">
+            <option value="13">Small</option>
+            <option value="14" selected>Normal</option>
+            <option value="18">Large</option>
+            <option value="24">Huge</option>
+          </select>
+          <span style="width:1px; background:var(--line,#E4DCC8); margin:2px 4px;"></span>
           <button type="button" class="bc-tool-btn" data-cmd="bold" title="Bold" style="font-weight:800;">B</button>
           <button type="button" class="bc-tool-btn" data-cmd="italic" title="Italic" style="font-style:italic;">I</button>
           <button type="button" class="bc-tool-btn" data-cmd="underline" title="Underline" style="text-decoration:underline;">U</button>
@@ -1708,7 +1715,7 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
         <div id="broadcastEditor" contenteditable="true"
              style="min-height:420px; max-height:640px; overflow-y:auto; background:#fff; border:1px solid var(--line,#E4DCC8); border-top:none; border-radius:0 0 8px 8px; padding:14px 16px; font-size:14px; line-height:1.6; color:var(--ink,#13202B);"
              data-placeholder="Hi {FirstName},&#10;&#10;Write your message here...">Hi {FirstName},<br><br></div>
-        <div style="font-size:11px; color:#9CA3AF; margin-top:6px;">Tip: click an inserted image to select it, then use the resize handle that appears in its corner to make it bigger or smaller. Hover an image to reveal a small × button to remove it.</div>
+        <div style="font-size:11px; color:#9CA3AF; margin-top:6px;">Tip: select text first, then choose a size from the dropdown above to resize just that text. Click an inserted image to select it, then use the resize handle that appears in its corner to make it bigger or smaller. Hover an image to reveal a small × button to remove it.</div>
 
         <div id="bcTemplateToggleWrap" style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:16px; background:var(--cream,#FDF8F0); border:1px solid var(--line,#E4DCC8); border-radius:10px; padding:12px 14px;">
           <div style="flex:1 1 auto; min-width:0;">
@@ -3083,6 +3090,32 @@ let bcAttachments = []; // { base64, mimeType, filename }
 // classic execCommand API. It's deprecated but still the only
 // cross-browser way to drive a contenteditable rich text editor
 // without pulling in a third-party editor library.
+// Font size dropdown: document.execCommand('fontSize', ...) only accepts
+// legacy sizes 1-7 and produces <font size="7"> tags, not real pixel
+// values, and some email clients strip <font> tags outright. The
+// standard workaround is to run the command with the highest legacy
+// size (7) as a unique marker, then immediately find whichever <font
+// size="7"> tags it just created and swap them for real
+// <span style="font-size:Xpx"> elements carrying the actual chosen size —
+// this survives into the final sent email exactly as expected.
+let bcLastAppliedFontSize = 14; // tracks the most recently chosen size, so any
+                                  // stray <font> marker gets cleaned up to the
+                                  // size the person actually picked, not a guess
+
+el('bcFontSizeSelect').addEventListener('change', () => {
+  const sizePx = el('bcFontSizeSelect').value;
+  bcLastAppliedFontSize = sizePx;
+  el('broadcastEditor').focus();
+  document.execCommand('fontSize', false, '7');
+  el('broadcastEditor').querySelectorAll('font[size="7"]').forEach(node => {
+    const span = document.createElement('span');
+    span.style.fontSize = sizePx + 'px';
+    span.innerHTML = node.innerHTML;
+    node.replaceWith(span);
+  });
+  el('bcFontSizeSelect').selectedIndex = 1; // reset display to "Normal" after applying
+});
+
 document.querySelectorAll('.bc-tool-btn[data-cmd]').forEach(btn => {
   btn.addEventListener('click', () => {
     el('broadcastEditor').focus();
@@ -3224,6 +3257,21 @@ function stripEditorControls(html){
       img.style.cssText = 'max-width:100%; border-radius:8px; display:block; margin:8px 0;';
       wrap.replaceWith(img);
     }
+  });
+  // Safety net: the font-size dropdown normally converts its <font
+  // size="7"> marker into a real pixel-based span immediately, but if
+  // the person typed new text right after choosing a size with no text
+  // selected (rather than resizing existing text), the browser can keep
+  // wrapping newly-typed characters in that same <font> tag as they're
+  // typed, before the immediate replacement logic ran again. Catching
+  // any leftover <font> tags here, right before send/preview, guarantees
+  // the final HTML never contains them — <font> tags aren't reliably
+  // supported the same way across email clients as real inline styles.
+  temp.querySelectorAll('font[size]').forEach(node => {
+    const span = document.createElement('span');
+    span.style.fontSize = bcLastAppliedFontSize + 'px';
+    span.innerHTML = node.innerHTML;
+    node.replaceWith(span);
   });
   return temp.innerHTML;
 }
