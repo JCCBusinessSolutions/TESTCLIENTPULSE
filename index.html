@@ -996,6 +996,33 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
     color: #fff;
     border-color: var(--navy, #0C447C);
   }
+  .bc-when-btn, .bc-day-btn{
+    width: auto !important;
+    min-height: auto;
+    padding: 10px 12px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--navy, #0C447C);
+    background: #fff;
+    border: 1.5px solid var(--line, #E4DCC8);
+    border-radius: 10px;
+    cursor: pointer;
+  }
+  .bc-when-btn.active, .bc-day-btn.active{
+    background: var(--navy, #0C447C);
+    color: #fff;
+    border-color: var(--navy, #0C447C);
+  }
+  .bc-scheduled-row{
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; background: var(--cream, #FDF8F0); border: 1px solid var(--line, #E4DCC8);
+    border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; font-size: 12.5px;
+  }
+  .bc-scheduled-cancel{
+    width: auto !important; min-height: auto; flex: 0 0 auto;
+    background: none; border: none; color: #EB5757; font-weight: 700;
+    font-size: 12px; cursor: pointer; padding: 4px 8px;
+  }
   .bc-picker-row{
     display: flex;
     align-items: center;
@@ -1709,11 +1736,36 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
 
         <div id="bcSizeIndicator" style="font-size:11px; color:#9CA3AF; margin-top:12px; text-align:right;">Message size: calculating\u2026</div>
 
+        <label style="margin-top:16px;">When to send</label>
+        <div style="display:flex; gap:6px; margin-bottom:10px;">
+          <button type="button" class="bc-when-btn active" id="bcSendNowBtn" data-when="now" style="flex:1;">SEND NOW</button>
+          <button type="button" class="bc-when-btn" id="bcSendLaterBtn" data-when="later" style="flex:1;">SEND LATER</button>
+        </div>
+
+        <div id="bcScheduleWrap" style="display:none; background:var(--cream,#FDF8F0); border:1px solid var(--line,#E4DCC8); border-radius:10px; padding:14px; margin-bottom:14px;">
+          <div style="display:flex; gap:6px; margin-bottom:10px;">
+            <button type="button" class="bc-day-btn active" id="bcDayTodayBtn" data-day="today" style="flex:1;">Today</button>
+            <button type="button" class="bc-day-btn" id="bcDayTomorrowBtn" data-day="tomorrow" style="flex:1;">Tomorrow</button>
+            <button type="button" class="bc-day-btn" id="bcDayPickBtn" data-day="pick" style="flex:1;">Pick a date</button>
+          </div>
+          <input type="date" id="bcScheduleDateInput" style="display:none; width:100%; padding:10px 12px; border:1px solid var(--line,#E4DCC8); border-radius:8px; background:#fff; font-size:14px; margin-bottom:10px;">
+
+          <label style="font-size:12px; color:#6B7280; margin-bottom:6px; display:block;">Time (every 30 minutes, 6:00 AM \u2013 6:00 PM)</label>
+          <select id="bcScheduleTimeSelect" style="width:100%; padding:10px 12px; border:1px solid var(--line,#E4DCC8); border-radius:8px; background:#fff; font-size:14px;"></select>
+
+          <div id="bcScheduleSummary" style="font-size:12px; color:var(--navy,#0C447C); font-weight:600; margin-top:10px;"></div>
+        </div>
+
         <div class="row" style="margin-top:6px;">
           <button class="btn-gold" id="bcPreviewBtn">PREVIEW</button>
           <button class="btn-primary" id="bcSendBtn">SEND BROADCAST</button>
         </div>
         <div class="status" id="broadcastStatus"></div>
+
+        <div id="bcScheduledListWrap" style="margin-top:20px;">
+          <label>Scheduled Broadcasts</label>
+          <div id="bcScheduledList" style="font-size:13px; color:#9CA3AF;">No scheduled broadcasts.</div>
+        </div>
 
         <div id="bcPreviewContainer" style="display:none; margin-top:16px; border:1px solid var(--line,#E4DCC8); border-radius:10px; overflow:hidden;">
           <div style="background:var(--cream,#FDF8F0); padding:8px 14px; font-size:11px; font-weight:700; color:var(--navy,#0C447C); border-bottom:1px solid var(--line,#E4DCC8);">PREVIEW — sent to: Dela Cruz, Juan Miguel</div>
@@ -2229,6 +2281,9 @@ function showPage(pageName){
 
   if (pageName === 'broadcast' && typeof updateSizeIndicator === 'function'){
     updateSizeIndicator();
+  }
+  if (pageName === 'broadcast' && typeof refreshScheduledBroadcastsList === 'function'){
+    refreshScheduledBroadcastsList();
   }
 }
 
@@ -3417,6 +3472,152 @@ el('bcPickerCloseBtn').addEventListener('click', closeBcPicker);
 el('bcPickerDoneBtn').addEventListener('click', closeBcPicker);
 
 /* ============================================================
+   SEND NOW / SEND LATER — lets the advisor queue a broadcast for
+   a specific future date/time instead of sending immediately.
+   Time slots are every 30 minutes from 6:00 AM to 6:00 PM. The
+   actual scheduling call happens in the Send button handler
+   further below; this block only manages the picker UI and
+   produces the final chosen Date.
+   ============================================================ */
+let bcSendMode = 'now'; // 'now' | 'later'
+let bcScheduleDay = 'today'; // 'today' | 'tomorrow' | 'pick'
+
+// Generates every 30-minute slot from 6:00 AM to 6:00 PM, labeled in
+// 12-hour time (e.g. "6:00 AM", "6:30 AM" ... "6:00 PM"), with the
+// value being the 24-hour "HH:mm" the rest of the code works with.
+function populateScheduleTimeOptions(){
+  const select = el('bcScheduleTimeSelect');
+  const options = [];
+  for (let totalMinutes = 6 * 60; totalMinutes <= 18 * 60; totalMinutes += 30){
+    const h24 = Math.floor(totalMinutes / 60);
+    const m = totalMinutes % 60;
+    const period = h24 < 12 ? 'AM' : 'PM';
+    const h12 = h24 % 12 === 0 ? 12 : h24 % 12;
+    const label = h12 + ':' + String(m).padStart(2, '0') + ' ' + period;
+    const value = String(h24).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+    options.push('<option value="' + value + '">' + label + '</option>');
+  }
+  select.innerHTML = options.join('');
+}
+populateScheduleTimeOptions();
+
+// Defaults the date input to today (used when "Pick a date" is chosen),
+// with a min of today so a past date can't be selected.
+function initScheduleDateInput(){
+  const today = new Date();
+  const iso = today.toISOString().split('T')[0];
+  el('bcScheduleDateInput').min = iso;
+  el('bcScheduleDateInput').value = iso;
+}
+initScheduleDateInput();
+
+el('bcSendNowBtn').addEventListener('click', () => {
+  bcSendMode = 'now';
+  el('bcSendNowBtn').classList.add('active');
+  el('bcSendLaterBtn').classList.remove('active');
+  el('bcScheduleWrap').style.display = 'none';
+  el('bcSendBtn').textContent = 'SEND BROADCAST';
+});
+
+el('bcSendLaterBtn').addEventListener('click', () => {
+  bcSendMode = 'later';
+  el('bcSendLaterBtn').classList.add('active');
+  el('bcSendNowBtn').classList.remove('active');
+  el('bcScheduleWrap').style.display = 'block';
+  el('bcSendBtn').textContent = 'SCHEDULE BROADCAST';
+  updateScheduleSummary();
+});
+
+['bcDayTodayBtn','bcDayTomorrowBtn','bcDayPickBtn'].forEach(id => {
+  el(id).addEventListener('click', () => {
+    bcScheduleDay = el(id).dataset.day;
+    document.querySelectorAll('.bc-day-btn').forEach(b => b.classList.toggle('active', b.id === id));
+    el('bcScheduleDateInput').style.display = bcScheduleDay === 'pick' ? 'block' : 'none';
+    updateScheduleSummary();
+  });
+});
+el('bcScheduleDateInput').addEventListener('change', updateScheduleSummary);
+el('bcScheduleTimeSelect').addEventListener('change', updateScheduleSummary);
+
+// Resolves the currently-selected day option + time slot into a real
+// Date object. Returns null if the resulting moment is already in the
+// past (e.g. "Today" + an earlier time slot than right now).
+function resolveScheduledDate(){
+  const timeValue = el('bcScheduleTimeSelect').value; // "HH:mm"
+  const [hh, mm] = timeValue.split(':').map(Number);
+
+  let baseDate;
+  if (bcScheduleDay === 'today'){
+    baseDate = new Date();
+  } else if (bcScheduleDay === 'tomorrow'){
+    baseDate = new Date();
+    baseDate.setDate(baseDate.getDate() + 1);
+  } else {
+    const picked = el('bcScheduleDateInput').value; // "YYYY-MM-DD"
+    if (!picked) return null;
+    const [y, mo, d] = picked.split('-').map(Number);
+    baseDate = new Date(y, mo - 1, d);
+  }
+  baseDate.setHours(hh, mm, 0, 0);
+  return baseDate;
+}
+
+function updateScheduleSummary(){
+  const date = resolveScheduledDate();
+  const summaryEl = el('bcScheduleSummary');
+  if (!date){
+    summaryEl.textContent = '';
+    return;
+  }
+  const now = new Date();
+  const formatted = date.toLocaleString('en-PH', { weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+  if (date.getTime() <= now.getTime()){
+    summaryEl.textContent = '\u26a0 That time has already passed \u2014 pick a later slot.';
+    summaryEl.style.color = '#EB5757';
+  } else {
+    summaryEl.textContent = 'Will send on ' + formatted;
+    summaryEl.style.color = 'var(--navy, #0C447C)';
+  }
+}
+
+// Loads and renders the list of currently-queued scheduled broadcasts,
+// each with a Cancel button. Called on page load and after any
+// schedule/cancel action so the list always reflects the latest state.
+async function refreshScheduledBroadcastsList(){
+  const container = el('bcScheduledList');
+  try{
+    const data = await callBackend({ action: 'getScheduledBroadcasts' });
+    const schedules = (data && data.schedules) || [];
+    const active = schedules.filter(s => s.status === 'scheduled');
+    if (active.length === 0){
+      container.innerHTML = '<div style="font-size:13px; color:#9CA3AF;">No scheduled broadcasts.</div>';
+      return;
+    }
+    container.innerHTML = active.map(s => {
+      const when = new Date(s.scheduledFor).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+      return '<div class="bc-scheduled-row">'
+        + '<span style="flex:1 1 auto; min-width:0;"><strong>' + escapeHtml(s.subject || '(no subject)') + '</strong><br>' + when + '</span>'
+        + '<button type="button" class="bc-scheduled-cancel" data-id="' + escapeHtml(s.scheduleId) + '">CANCEL</button>'
+        + '</div>';
+    }).join('');
+    container.querySelectorAll('.bc-scheduled-cancel').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        btn.textContent = '...';
+        try{
+          await callBackend({ action: 'cancelScheduledBroadcast', scheduleId: btn.dataset.id });
+          await refreshScheduledBroadcastsList();
+        }catch(err){
+          showStatus('broadcastStatus','error','Could not cancel: ' + err.message);
+        }
+      });
+    });
+  }catch(err){
+    container.innerHTML = '<div style="font-size:13px; color:#9CA3AF;">Could not load scheduled broadcasts.</div>';
+  }
+}
+
+/* ============================================================
    HEADER/FOOTER TEMPLATE — reuses the exact header and footer
    photos already saved in Branding Studio (same Drive files
    used by dues reminders and birthday greetings), so a
@@ -3593,6 +3794,30 @@ el('bcSendBtn').addEventListener('click', async () => {
 
   const recipients = bcAllClients.filter(c => bcSelectedEmails.has(c.email));
 
+  if (bcSendMode === 'later'){
+    const scheduledDate = resolveScheduledDate();
+    if (!scheduledDate){
+      showStatus('broadcastStatus','error','Please pick a valid date.');
+      return;
+    }
+    if (scheduledDate.getTime() <= Date.now()){
+      showStatus('broadcastStatus','error','That time has already passed \u2014 please pick a later slot.');
+      return;
+    }
+    const formatted = scheduledDate.toLocaleString('en-PH', { weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+    el('bcConfirmCount').textContent =
+      'This will send to ' + recipients.length + ' selected client' + (recipients.length === 1 ? '' : 's') +
+      ' on ' + formatted + ', personalized with each client\u2019s first name' +
+      (bcAttachments.length ? ', with ' + bcAttachments.length + ' attachment' + (bcAttachments.length === 1 ? '' : 's') + '.' : '.');
+    el('bcConfirmOverlay').style.display = 'flex';
+    el('bcConfirmCancel').onclick = () => { el('bcConfirmOverlay').style.display = 'none'; };
+    el('bcConfirmSend').onclick = async () => {
+      el('bcConfirmOverlay').style.display = 'none';
+      await runScheduleBroadcast(recipients, subject, body, bcUseTemplate, scheduledDate);
+    };
+    return;
+  }
+
   el('bcConfirmCount').textContent =
     'This will send to ' + recipients.length + ' selected client' + (recipients.length === 1 ? '' : 's') +
     ', personalized with each client\u2019s first name' +
@@ -3605,6 +3830,41 @@ el('bcSendBtn').addEventListener('click', async () => {
     await runBroadcastSend(recipients, subject, body, bcUseTemplate);
   };
 });
+
+// Queues the broadcast for later instead of sending immediately \u2014
+// packages the same payload shape sendBroadcastEmailBatch expects, so
+// the trigger handler on the backend can replay it exactly at the
+// scheduled time.
+async function runScheduleBroadcast(recipients, subject, body, useTemplate, scheduledDate){
+  el('bcSendBtn').disabled = true;
+  el('bcPreviewBtn').disabled = true;
+  try{
+    const rows = recipients.map(c => ({ email: c.email, clientName: c.clientName }));
+    const payload = {
+      rows: rows,
+      subject: subject,
+      htmlBody: body,
+      attachments: bcAttachments,
+      useTemplate: !!useTemplate
+    };
+    const result = await callBackend({
+      action: 'scheduleBroadcast',
+      scheduledFor: scheduledDate.toISOString(),
+      payload: payload
+    });
+    if (!result.success){
+      throw new Error(result.error || 'Unknown error from server');
+    }
+    const formatted = scheduledDate.toLocaleString('en-PH', { weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+    showStatus('broadcastStatus','success', 'Scheduled \u2014 will send to ' + recipients.length + ' client' + (recipients.length === 1 ? '' : 's') + ' on ' + formatted + '.');
+    await refreshScheduledBroadcastsList();
+  }catch(err){
+    showStatus('broadcastStatus','error','Could not schedule: ' + err.message);
+  }finally{
+    el('bcSendBtn').disabled = false;
+    el('bcPreviewBtn').disabled = false;
+  }
+}
 
 async function runBroadcastSend(recipients, subject, body, useTemplate){
   el('bcSendBtn').disabled = true;
