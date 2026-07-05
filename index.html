@@ -1812,6 +1812,20 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
           <button class="collapse-toggle" id="toggleLapsedClients" aria-label="Collapse">&#8943;</button>
         </div>
         <div id="lapsedClientsBody">
+          <div style="padding:12px 16px;border-bottom:1px solid #e7dfcf;">
+            <select id="lapsedSortSelect" style="width:100%;padding:9px 10px;border:1px solid #ddd;border-radius:8px;font-size:12.5px;font-family:inherit;background:#fff;color:#374151;margin-bottom:10px;">
+              <option value="recent">Sort: Most recently lapsed</option>
+              <option value="lt1">Less than 1 year lapsed</option>
+              <option value="lt2">Less than 2 years lapsed</option>
+              <option value="lt3">Less than 3 years lapsed</option>
+              <option value="gt3">More than 3 years lapsed</option>
+            </select>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <input type="text" id="lapsedSearchInput" placeholder="Search by name or product..." style="flex:1;min-width:0;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;font-family:inherit;">
+              <button type="button" id="lapsedSearchClearBtn" style="width:auto;min-height:0;flex-shrink:0;background:none;border:1px solid #ddd;border-radius:8px;cursor:pointer;color:#999;font-size:16px;padding:8px 12px;">✕</button>
+            </div>
+            <div style="font-size:11px;color:#6b7280;margin-top:8px;" id="lapsedSearchCount"></div>
+          </div>
           <p class="sub" id="lapsedClientsSub">Loading lapsed policies…</p>
           <div id="lapsedClientsList" style="max-height:400px;overflow-y:auto;padding:12px 16px;border:1px solid #e7dfcf;border-radius:6px;"></div>
         </div>
@@ -1965,6 +1979,15 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
           <div id="bcPlanFilterWrap" style="margin-bottom:10px;">
             <select id="bcPlanFilter" style="width:100%; padding:9px 12px; border:1px solid var(--line,#E4DCC8); border-radius:10px; background:var(--cream,#FDF8F0); font-size:13px; color:var(--ink,#13202B);">
               <option value="">All plans</option>
+            </select>
+          </div>
+
+          <div id="bcLapsedFilterWrap" style="margin-bottom:10px;">
+            <select id="bcLapsedFilter" style="width:100%; padding:9px 12px; border:1px solid var(--line,#E4DCC8); border-radius:10px; background:var(--cream,#FDF8F0); font-size:13px; color:var(--ink,#13202B);">
+              <option value="">All clients (any lapsed status)</option>
+              <option value="lt1">Lapsed: Less than 1 year</option>
+              <option value="1to2">Lapsed: More than 1 year, less than 2 years</option>
+              <option value="2to3">Lapsed: More than 2 years, less than 3 years</option>
             </select>
           </div>
 
@@ -3570,6 +3593,7 @@ el('bcChooseRecipientsBtn').addEventListener('click', async () => {
     }
     el('bcPickerSearch').value = '';
     el('bcPlanFilter').value = '';
+    if (el('bcLapsedFilter')) el('bcLapsedFilter').value = '';
     populatePlanFilterOptions();
     renderPickerList(currentFilteredClients());
     el('bcPickerOverlay').style.display = 'flex';
@@ -3638,6 +3662,10 @@ el('bcPlanFilter').addEventListener('change', () => {
   renderPickerList(currentFilteredClients());
 });
 
+el('bcLapsedFilter')?.addEventListener('change', () => {
+  renderPickerList(currentFilteredClients());
+});
+
 function renderPickerList(clients){
   const container = el('bcPickerList');
   if (clients.length === 0){
@@ -3679,12 +3707,28 @@ function updatePickerCount(){
 function currentFilteredClients(){
   const query = el('bcPickerSearch').value.trim().toLowerCase();
   const plan = el('bcPlanFilter').value;
+  const lapsedFilter = el('bcLapsedFilter') ? el('bcLapsedFilter').value : '';
   let list = bcAllClients;
   if (query){
     list = list.filter(c => (c.clientName || '').toLowerCase().includes(query));
   }
   if (plan){
     list = list.filter(c => (c.product || '') === plan);
+  }
+  if (lapsedFilter){
+    // Reuses the same elapsed-time calculation as the Lapsed Policies
+    // list itself, so "less than 1 year" here means exactly the same
+    // thing it does there. A client with no usable lapse date (never
+    // lapsed, or the export had no Lapse Date column) never matches
+    // any of these options, since there's nothing to measure.
+    list = list.filter(c => {
+      const years = yearsSinceLapse(c.lapseDate);
+      if (years === null) return false;
+      if (lapsedFilter === 'lt1') return years < 1;
+      if (lapsedFilter === '1to2') return years >= 1 && years < 2;
+      if (lapsedFilter === '2to3') return years >= 2 && years < 3;
+      return true;
+    });
   }
   return sortClients(list, bcSortField);
 }
@@ -6144,6 +6188,23 @@ function isLapsedStatus(policyStatus){
   return s.includes('lapsed') || s.includes('lapse');
 }
 
+// Calculates elapsed years between a lapse date and today, used to
+// bucket a lapsed policy into "less than 1/2/3 years" or "more than 3
+// years". Returns null when there's no usable lapse date, so callers
+// can decide how to handle that case (e.g. exclude from a specific
+// year-bucket filter, since there's nothing to bucket).
+function yearsSinceLapse(lapseDateStr){
+  if (!lapseDateStr) return null;
+  const lapseDate = new Date(lapseDateStr);
+  if (isNaN(lapseDate.getTime())) return null;
+  const msPerYear = 365.25 * 24 * 60 * 60 * 1000;
+  return (Date.now() - lapseDate.getTime()) / msPerYear;
+}
+
+// Tracks the currently selected Lapsed sort/filter mode, mirroring
+// currentDuesSortMode's role for the Premium Due Reminders list.
+let currentLapsedSortMode = 'recent';
+
 // Whether the "excluded from reminders" summary box is expanded
 let duesExcludedExpanded = false;
 let birthdayExcludedExpanded = false;
@@ -6294,6 +6355,64 @@ function filterDuesClients(){
   if (countEl) {
     const isFiltered = !!query || !!planValue;
     countEl.textContent = isFiltered && filtered.length !== allDuesClients.length ? `${filtered.length} of ${allDuesClients.length} match` : '';
+  }
+}
+
+// Sorts/filters lapsed clients by how long ago they lapsed. "recent"
+// keeps the existing most-recently-lapsed-first order; the year-bucket
+// options FILTER down to only policies within that elapsed-time range
+// (e.g. "lt2" shows only policies lapsed less than 2 years ago),
+// since "less than 2 years lapsed" describes a specific group of
+// clients to review, not merely a different sort order over everyone.
+function sortLapsedForDisplay(list, sortMode){
+  if (sortMode === 'lt1'){
+    return list.filter(c => { const y = yearsSinceLapse(c.lapseDate); return y !== null && y < 1; });
+  }
+  if (sortMode === 'lt2'){
+    return list.filter(c => { const y = yearsSinceLapse(c.lapseDate); return y !== null && y < 2; });
+  }
+  if (sortMode === 'lt3'){
+    return list.filter(c => { const y = yearsSinceLapse(c.lapseDate); return y !== null && y < 3; });
+  }
+  if (sortMode === 'gt3'){
+    return list.filter(c => { const y = yearsSinceLapse(c.lapseDate); return y !== null && y >= 3; });
+  }
+  // 'recent' (default) — already sorted most-recent-first by
+  // refreshDuesClientList when allLapsedClients is first built; just
+  // pass the list through unchanged.
+  return list;
+}
+
+function filterLapsedClients(){
+  const input = document.getElementById('lapsedSearchInput');
+  const sortSelect = document.getElementById('lapsedSortSelect');
+  const countEl = document.getElementById('lapsedSearchCount');
+  if (!input) return;
+
+  const query = input.value.toLowerCase().trim();
+  const sortMode = sortSelect ? sortSelect.value : 'recent';
+  currentLapsedSortMode = sortMode;
+
+  if (!allLapsedClients || allLapsedClients.length === 0){
+    if (countEl) countEl.textContent = '';
+    return;
+  }
+
+  let filtered = allLapsedClients;
+  if (query){
+    filtered = filtered.filter(client => {
+      const nameMatch = (client.clientName || '').toLowerCase().includes(query);
+      const productMatch = (client.product || '').toLowerCase().includes(query);
+      return nameMatch || productMatch;
+    });
+  }
+
+  filtered = sortLapsedForDisplay(filtered, sortMode);
+  renderLapsedClientsList(filtered);
+
+  if (countEl) {
+    const isFiltered = !!query || sortMode !== 'recent';
+    countEl.textContent = isFiltered && filtered.length !== allLapsedClients.length ? `${filtered.length} of ${allLapsedClients.length} match` : '';
   }
 }
 
@@ -6847,7 +6966,7 @@ async function refreshDuesClientList(useCache = false){
         allLapsedClients = cached.filter(c => isLapsedStatus(c.policyStatus));
         populateDuesPlanFilter();
         filterDuesClients();
-        renderLapsedClientsList(allLapsedClients);
+        filterLapsedClients();
         updateDuesExcludedSummary();
         redrawClientSummaryCharts();
         sub.textContent = allDuesClients.length + ' client(s) — last saved, updating…';
@@ -6882,7 +7001,7 @@ async function refreshDuesClientList(useCache = false){
   // Re-applies whatever plan filter/sort the person already had selected,
   // rather than resetting the view back to the default every refresh.
   filterDuesClients();
-  renderLapsedClientsList(allLapsedClients);
+  filterLapsedClients();
   updateDuesExcludedSummary();
   redrawClientSummaryCharts();
   sub.textContent = allDuesClients.length + ' client(s) loaded, sorted by closest due date';
@@ -7130,6 +7249,17 @@ function setupClientsTab(){
   });
   document.getElementById('duesPlanFilter')?.addEventListener('change', filterDuesClients);
   document.getElementById('duesSortSelect')?.addEventListener('change', filterDuesClients);
+
+  const lapsedSearchInput = document.getElementById('lapsedSearchInput');
+  if (lapsedSearchInput) {
+    lapsedSearchInput.addEventListener('input', filterLapsedClients);
+  }
+  document.getElementById('lapsedSearchClearBtn')?.addEventListener('click', function(){
+    if (lapsedSearchInput) lapsedSearchInput.value = '';
+    filterLapsedClients();
+    if (lapsedSearchInput) lapsedSearchInput.focus();
+  });
+  document.getElementById('lapsedSortSelect')?.addEventListener('change', filterLapsedClients);
 
   const birthdaySearchInput = document.getElementById('birthdaySearchInput');
   if (birthdaySearchInput) {
