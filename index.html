@@ -1949,7 +1949,7 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
         <div id="bcConfirmOverlay" style="display:none; position:fixed; inset:0; z-index:400; background:rgba(8,20,35,.6); align-items:center; justify-content:center; padding:20px;" onclick="if(event.target===this) this.style.display='none';">
           <div style="background:#fff; border-radius:16px; max-width:360px; width:100%; padding:24px 22px; text-align:center;">
             <div style="font-size:15px; font-weight:700; color:var(--navy,#0C447C); margin-bottom:8px;">Send this broadcast?</div>
-            <div id="bcConfirmCount" style="font-size:13px; color:#6B7280; margin-bottom:20px; line-height:1.6;"></div>
+            <div id="bcConfirmCount" style="font-size:13px; color:#6B7280; margin-bottom:20px; line-height:1.6; white-space:pre-line;"></div>
             <div style="display:flex; gap:8px;">
               <button class="btn-ghost" id="bcConfirmCancel" style="flex:1;">CANCEL</button>
               <button class="btn-primary" id="bcConfirmSend" style="flex:1;">YES, SEND</button>
@@ -4366,18 +4366,15 @@ async function calculateBroadcastSizeMB(){
   return { mb: ((bodyBytes + attachmentBytes + templateBytes) / (1024 * 1024)) * MIME_ENCODING_OVERHEAD, uncertain: uncertain };
 }
 
-// Gmail's real usable ceiling, once MIME/base64 overhead is factored
-// in, is meaningfully lower than its ~25MB nominal limit. 8MB of
-// combined raw content is a conservative, safe practical threshold.
-// 6MB is a deliberately conservative safety margin, matching the
-// backend's own check in Code.gs (sendBroadcastEmailBatch) — kept in
-// sync manually since Apps Script and the browser don't share
-// constants. Lowered from 8MB after a real broadcast that measured
-// ~7.5MB under the old threshold still failed to actually send;
-// Google's documentation notes email body/header size and attachments
-// size are quota-limited *separately* in ways not fully published, so
-// this errs well on the safe side rather than cutting it close.
-const BC_MAX_SIZE_MB = 6;
+// Gmail's ACTUAL body/header quota (separate from and apparently far
+// stricter than its 25MB attachment limit) turned out to be much lower
+// than previously assumed — a real broadcast measuring ~0.88MB under
+// the OLD calculation was rejected by Gmail for every single recipient.
+// 2MB is a conservative threshold set well below that real observed
+// failure point, matching the backend's own check in Code.gs
+// (sendBroadcastEmailBatch) — kept in sync manually since Apps Script
+// and the browser don't share constants.
+const BC_MAX_SIZE_MB = 2;
 
 async function updateSizeIndicator(){
   const result = await calculateBroadcastSizeMB();
@@ -4533,10 +4530,21 @@ el('bcSendBtn').addEventListener('click', async () => {
     return;
   }
 
+  // Only checked for immediate sends — a scheduled broadcast's quota
+  // situation could look completely different by the time it actually
+  // fires (today's send might reset the count, or other emails sent in
+  // the meantime might reduce it further), so checking now wouldn't
+  // reliably reflect reality at the moment it matters.
+  const remainingQuota = await fetchRemainingEmailQuota();
+  const quotaWarning = (remainingQuota !== null && recipients.length > remainingQuota)
+    ? '\n\n\u26a0\ufe0f This Gmail account has only ' + remainingQuota + ' email' + (remainingQuota === 1 ? '' : 's') + ' left in today\u2019s sending quota \u2014 the remaining ' + (recipients.length - remainingQuota) + ' recipient' + (recipients.length - remainingQuota === 1 ? '' : 's') + ' won\u2019t receive this until the quota resets (personal Gmail accounts get 100/day; Google Workspace accounts get up to 1,500/day).'
+    : '';
+
   el('bcConfirmCount').textContent =
     'This will send to ' + recipients.length + ' selected client' + (recipients.length === 1 ? '' : 's') +
     ', personalized with each client\u2019s first name' +
-    (bcAttachments.length ? ', with ' + bcAttachments.length + ' attachment' + (bcAttachments.length === 1 ? '' : 's') + '.' : '.');
+    (bcAttachments.length ? ', with ' + bcAttachments.length + ' attachment' + (bcAttachments.length === 1 ? '' : 's') + '.' : '.') +
+    quotaWarning;
   el('bcConfirmOverlay').style.display = 'flex';
 
   el('bcConfirmCancel').onclick = () => { el('bcConfirmOverlay').style.display = 'none'; };
@@ -4997,6 +5005,26 @@ async function fetchDueToday(){
   const res = await fetch(url + '?action=getDueToday');
   const data = await res.json();
   return data.rows || [];
+}
+
+// Personal Gmail accounts cap out at 100 email recipients per rolling
+// 24-hour period (Google Workspace accounts get up to 1,500) — this
+// checks how much of that is left right now, so a large broadcast can
+// warn the advisor before sending rather than running out of quota
+// partway through with no context for how many recipients actually
+// have a realistic chance of receiving it today. Returns null if the
+// check itself fails (e.g. Setup URL unreachable), which callers treat
+// as "unknown" rather than blocking the send outright on that alone.
+async function fetchRemainingEmailQuota(){
+  try{
+    const url = getScriptUrl();
+    if (!url) return null;
+    const res = await fetch(url + '?action=getRemainingEmailQuota');
+    const data = await res.json();
+    return typeof data.remaining === 'number' ? data.remaining : null;
+  }catch(e){
+    return null;
+  }
 }
 
 function escapeHtml(str){

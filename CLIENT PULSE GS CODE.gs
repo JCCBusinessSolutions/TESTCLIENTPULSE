@@ -1062,42 +1062,70 @@ function sendBroadcastEmailBatch(rows, subject, htmlBody, attachments, useTempla
   // it completely missed images inserted directly into the message body
   // via the editor's own Image button, which get embedded as base64
   // data URLs right inside htmlBody itself. That gap is exactly what
-  // let an oversized broadcast (body image + header + footer combined)
-  // slip past every prior check and fail silently for every recipient.
-  // This measures the real total: htmlBody's own length (which already
-  // includes any inline base64 images baked into it) plus attachments
-  // plus the template photos, all as they'll actually be transmitted.
-  const htmlBodyBytes = Utilities.newBlob(String(htmlBody || '')).getBytes().length;
+  // The size check below measures the real total as it will actually
+  // be transmitted: the processed HTML body (after converting any
+  // embedded data-URL images to cid: references, see below), those
+  // extracted body images, the header/footer template, and attachments.
   const attachmentBytesTotal = (attachments || []).reduce((sum, a) => sum + Math.ceil((a.base64 || '').length * 0.75), 0);
-  // Every one of these three pieces — the template photos, any inline
-  // body images, and real attachments — gets MIME/base64-encoded before
-  // Gmail actually transmits it, which inflates the real wire size by
-  // roughly 33% over the raw bytes measured above. Comparing raw bytes
-  // against a raw-byte threshold is exactly why a broadcast that
-  // measured ~0.64MB here could still fail with "Email is too large"
-  // for every recipient — the real transmitted size was meaningfully
-  // higher than what was being checked. Multiplying by this factor
-  // before comparing against the 6MB threshold is what actually closes
-  // that gap, rather than just lowering the raw-byte threshold further
-  // and hoping it happens to cover the same margin.
+
+  // Any image inserted via the composer's own Image button lands in
+  // htmlBody as a literal <img src="data:..."> data URL — this is
+  // simple to build client-side, but it means the image's full base64
+  // text sits directly inside the HTML body string. GmailApp's
+  // body/header size quota (which is separate from, and apparently far
+  // stricter than, the 25MB attachment limit) counts that inflated HTML
+  // text directly, which is why a broadcast that measured well under
+  // our 6MB threshold could still be rejected by Gmail for every single
+  // recipient — the real quota-counted size was dominated by base64
+  // text sitting in the body, not by attachments or the header/footer
+  // template at all. Converting each data-URL image into a proper
+  // cid: reference (exactly like the header/footer template already
+  // does) moves that image out of the quota-counted HTML text and into
+  // a separate inline resource, which is what actually brings the real
+  // sent size down to something Gmail's stricter body quota accepts.
+  const dataUrlImagePattern = /<img[^>]+src="data:([^;]+);base64,([^"]+)"[^>]*>/g;
+  const bodyInlineImages = {};
+  let bodyImageCounter = 0;
+  let processedHtmlBody = String(htmlBody || '').replace(dataUrlImagePattern, (fullMatch, mimeType, base64Data) => {
+    const cid = 'bcBodyImg' + (bodyImageCounter++);
+    try{
+      const bytes = Utilities.base64Decode(base64Data);
+      bodyInlineImages[cid] = Utilities.newBlob(bytes, mimeType, cid);
+    }catch(e){
+      return fullMatch; // if decoding fails for any reason, leave this one exactly as-is rather than breaking the whole send
+    }
+    return fullMatch.replace(/src="data:[^"]+"/, 'src="cid:' + cid + '"');
+  });
+  // Recalculate the real body size using the now-much-smaller HTML (data
+  // URLs replaced with short cid: references) plus the actual decoded
+  // image bytes, which reflects what Gmail's body quota will actually
+  // see much more accurately than measuring the original data-URL-laden
+  // htmlBody ever could.
+  const processedHtmlBodyBytes = Utilities.newBlob(processedHtmlBody).getBytes().length;
+  const bodyImageBytesTotal = Object.values(bodyInlineImages).reduce((sum, blob) => sum + blob.getBytes().length, 0);
+  // Every one of these pieces gets MIME/base64-encoded before Gmail
+  // actually transmits it, inflating the real wire size over these raw
+  // byte counts.
   const MIME_ENCODING_OVERHEAD = 1.37;
-  const totalMB = ((htmlBodyBytes / (1024 * 1024)) + templateMB + (attachmentBytesTotal / (1024 * 1024))) * MIME_ENCODING_OVERHEAD;
-  // 6MB is a deliberately conservative safety margin — Google's own
-  // documentation notes the email body/header size and the attachments
-  // size are quota-limited *separately*, and the exact numbers aren't
-  // publicly documented in a way that lets this be calculated exactly.
-  // A broadcast that measured ~7.5MB under the old 8MB threshold still
-  // failed to actually send in practice, so this is intentionally
-  // tighter than what the raw math alone would suggest is safe.
-  if (totalMB > 6){
+  const totalMB = ((processedHtmlBodyBytes / (1024 * 1024)) + (bodyImageBytesTotal / (1024 * 1024)) + templateMB + (attachmentBytesTotal / (1024 * 1024))) * MIME_ENCODING_OVERHEAD;
+  // A REAL broadcast that measured ~0.88MB under the OLD calculation
+  // (which counted body images as inflated base64 text sitting directly
+  // in the HTML, rather than as separate inline resources) was rejected
+  // by Gmail for every single recipient. That means Gmail's actual body
+  // quota is far stricter than 6MB — this threshold is set with a wide
+  // safety margin below that real failure point now that data-URL
+  // images are correctly converted to cid: references before this
+  // check runs, rather than trying to guess a new raw-byte number that
+  // might still be wrong in the same direction.
+  if (totalMB > 2){
     throw new Error(
-      'This message is too large (~' + totalMB.toFixed(1) + 'MB total once encoded for sending, including any inserted photos, the header/footer template, and attachments) to send reliably. ' +
+      'This message is too large (~' + totalMB.toFixed(2) + 'MB total once encoded for sending, including any inserted photos, the header/footer template, and attachments) to send reliably. ' +
       'Remove an inline image or attachment, or turn off "Use header & footer template", then try again.'
     );
   }
-  if (useTemplate && (templateMB * MIME_ENCODING_OVERHEAD) > 2){
+  if (useTemplate && (templateMB * MIME_ENCODING_OVERHEAD) > 1){
     throw new Error(
-      'Your saved header/footer photos are too large (~' + (templateMB * MIME_ENCODING_OVERHEAD).toFixed(1) + 'MB combined once encoded for sending) to embed in every email of this broadcast. ' +
+      'Your saved header/footer photos are too large (~' + (templateMB * MIME_ENCODING_OVERHEAD).toFixed(2) + 'MB combined once encoded for sending) to embed in every email of this broadcast. ' +
       'Go to Settings \u2192 Branding Studio and re-upload your header and footer photos \u2014 they\u2019ll now be compressed automatically to a safe size. ' +
       'Or turn off "Use header & footer template" for this broadcast and send without it.'
     );
@@ -1111,10 +1139,10 @@ function sendBroadcastEmailBatch(rows, subject, htmlBody, attachments, useTempla
   const wrappedBody = useTemplate
     ? '<div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;border:1px solid #E7DFCF;border-radius:10px;overflow:hidden;">'
       + '<img src="cid:headerImg" alt="Header" style="width:100%;display:block;">'
-      + '<div style="padding:24px;background:#FDF8F0;color:#1C2A38;">' + String(htmlBody || '') + '</div>'
+      + '<div style="padding:24px;background:#FDF8F0;color:#1C2A38;">' + processedHtmlBody + '</div>'
       + '<img src="cid:footerImg" alt="Footer" style="width:100%;display:block;">'
       + '</div>'
-    : String(htmlBody || '');
+    : processedHtmlBody;
 
   let sent = 0, failed = 0;
   const failedEmails = [];
@@ -1142,7 +1170,12 @@ function sendBroadcastEmailBatch(rows, subject, htmlBody, attachments, useTempla
         htmlBody: personalizedBody,
         name: config.senderName,
       };
-      if (useTemplate) options.inlineImages = getEmailImages(config);
+      // Merges the header/footer template images (when enabled) with
+      // any body images that were converted from data URLs to cid:
+      // references above \u2014 both need to be present in inlineImages
+      // for their respective cid: references in the HTML to resolve.
+      const combinedInlineImages = Object.assign({}, useTemplate ? getEmailImages(config) : {}, bodyInlineImages);
+      if (Object.keys(combinedInlineImages).length > 0) options.inlineImages = combinedInlineImages;
       if (blobs.length > 0) options.attachments = blobs;
       if (config.contactEmail){
         options.cc = config.contactEmail;
@@ -1155,14 +1188,14 @@ function sendBroadcastEmailBatch(rows, subject, htmlBody, attachments, useTempla
       failedEmails.push(r.email);
       const translatedReason = toEnglishErrorMessage(err.message || String(err));
       // If this is a size-related failure, attach the exact numbers our
-      // own pre-check calculated for this send — htmlBody bytes, the
-      // template's combined size, and the attachment total — so if
-      // Gmail rejects a send that our pre-check considered safe, the
-      // actual breakdown is visible immediately instead of having to
-      // guess again which component the pre-check is undercounting.
+      // own pre-check calculated for this send \u2014 the processed body
+      // size, body image total, template size, and attachment total \u2014
+      // so if Gmail rejects a send that our pre-check considered safe,
+      // the actual breakdown is visible immediately instead of having
+      // to guess again which component the pre-check is undercounting.
       const isSizeRelated = /too large|limit exceeded|laki ng body/i.test(translatedReason);
       const diagnosticSuffix = isSizeRelated
-        ? ' [diagnostic: htmlBody=' + (htmlBodyBytes/1024).toFixed(0) + 'KB, template=' + templateMB.toFixed(2) + 'MB, attachments=' + (attachmentBytesTotal/1024/1024).toFixed(2) + 'MB, precheck total=' + totalMB.toFixed(2) + 'MB]'
+        ? ' [diagnostic: htmlBody=' + (processedHtmlBodyBytes/1024).toFixed(0) + 'KB, bodyImages=' + (bodyImageBytesTotal/1024/1024).toFixed(2) + 'MB, template=' + templateMB.toFixed(2) + 'MB, attachments=' + (attachmentBytesTotal/1024/1024).toFixed(2) + 'MB, precheck total=' + totalMB.toFixed(2) + 'MB]'
         : '';
       failureReasons.push({ email: r.email, reason: translatedReason + diagnosticSuffix });
     }
