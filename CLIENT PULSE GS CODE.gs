@@ -6,7 +6,7 @@
  */
 
 const SHEET_NAME = 'Dues Tracker';
-const HEADERS = ['Policy Number','Client Name','Email','Product','Premium Mode','Premium Amount','Fund Value','Due Date','Policy Status','Last Reminder Sent','Send Dues?','Lapse Date'];
+const HEADERS = ['Policy Number','Client Name','Email','Product','Premium Mode','Premium Amount','Fund Value','Due Date','Policy Status','Last Reminder Sent','Send Dues?','Lapse Date','Issued Date'];
 
 const BIRTHDAY_SHEET_NAME = 'Birthday Tracker';
 const BIRTHDAY_HEADERS = ['Full Name','Email','Contact Number','Location','Date of Birth','Last Greeting Sent (Year)','Send Birthday?'];
@@ -227,6 +227,11 @@ function setupSheet(){
       const lastCol = sheet.getLastColumn() + 1;
       sheet.getRange(1, lastCol).setValue('Lapse Date');
     }
+    const headersAfterLapseDate = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    if (!headersAfterLapseDate.includes('Issued Date')){
+      const lastCol = sheet.getLastColumn() + 1;
+      sheet.getRange(1, lastCol).setValue('Issued Date');
+    }
   }
   const policyColIndex = HEADERS.indexOf('Policy Number') + 1;
   sheet.getRange(1, policyColIndex, sheet.getMaxRows(), 1).setNumberFormat('@');
@@ -385,6 +390,8 @@ function getDuesClientList(){
     const dueDate = row[col('Due Date')];
     const lapseDateCol = col('Lapse Date');
     const lapseDateRaw = lapseDateCol !== -1 ? row[lapseDateCol] : null;
+    const issuedDateCol = col('Issued Date');
+    const issuedDateRaw = issuedDateCol !== -1 ? row[issuedDateCol] : null;
     result.push({
       policyNumber: policyNum,
       clientName: row[col('Client Name')],
@@ -395,6 +402,7 @@ function getDuesClientList(){
       fundValue: parsedFundValue,
       dueDate: dueDate instanceof Date ? Utilities.formatDate(dueDate, Session.getScriptTimeZone(), 'yyyy-MM-dd') : '',
       lapseDate: lapseDateRaw instanceof Date ? Utilities.formatDate(lapseDateRaw, Session.getScriptTimeZone(), 'yyyy-MM-dd') : '',
+      issuedDate: issuedDateRaw instanceof Date ? Utilities.formatDate(issuedDateRaw, Session.getScriptTimeZone(), 'yyyy-MM-dd') : '',
       policyStatus: row[col('Policy Status')],
       sendDues: row[col('Send Dues?')] === true || row[col('Send Dues?')] === 'TRUE' || row[col('Send Dues?')] === 1 || row[col('Send Dues?')] === '1'
     });
@@ -583,10 +591,11 @@ function pushDuesRows(rows){
   rows.forEach(r => {
     const dueDateValue = r.dueDate ? new Date(r.dueDate) : '';
     const lapseDateValue = r.lapseDate ? new Date(r.lapseDate) : '';
+    const issuedDateValue = r.issuedDate ? new Date(r.issuedDate) : '';
     // Row order must exactly match HEADERS: Policy Number, Client Name,
     // Email, Product, Premium Mode, Premium Amount, Fund Value, Due Date,
-    // Policy Status, Last Reminder Sent, Send Dues?, Lapse Date
-    const rowValues = [r.policyNumber, r.clientName, r.email, r.product, r.premiumMode, r.premiumAmount, (r.fundValue || 0), dueDateValue, r.policyStatus, '', true, lapseDateValue];
+    // Policy Status, Last Reminder Sent, Send Dues?, Lapse Date, Issued Date
+    const rowValues = [r.policyNumber, r.clientName, r.email, r.product, r.premiumMode, r.premiumAmount, (r.fundValue || 0), dueDateValue, r.policyStatus, '', true, lapseDateValue, issuedDateValue];
     const idx = existingRowByPolicy[String(r.policyNumber)];
     if (idx !== undefined){
       const lastReminderSent = data[idx][lastReminderCol];

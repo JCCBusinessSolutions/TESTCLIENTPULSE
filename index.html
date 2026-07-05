@@ -215,6 +215,7 @@
   #birthdaysTodayBody.collapsed{ display:none; }
   #duesClientsBody.collapsed{ display:none; }
   #birthdayClientsBody.collapsed{ display:none; }
+  #planSummaryWrap.collapsed{ display:none; }
 
   /* ============================================================
      NEW DASHBOARD CHROME — sidebar, hero, KPIs, mobile nav.
@@ -1655,23 +1656,6 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
         <p class="sub">Choose which clients will receive dues reminders and birthday greetings. Toggle off any clients you don't want to reach out to automatically.</p>
       </div>
 
-      <!-- SUMMARY CHARTS — Fund Value distribution and per-plan counts,
-           drawn as plain <canvas> bar charts so this stays a single,
-           self-contained file with no extra chart library dependency. -->
-      <div class="card" id="clientsSummaryCard">
-        <div class="card-header-row" id="clientsSummaryHeader">
-          <h2 style="margin:0;">Client Summary</h2>
-          <button class="collapse-toggle" id="toggleClientsSummary" aria-label="Collapse">&#8943;</button>
-        </div>
-        <div id="clientsSummaryBody">
-          <p class="sub" style="margin-bottom:4px;">Fund Value Distribution</p>
-          <p style="font-size:11px; color:#9CA3AF; margin:0 0 8px;">Tap a bar to see which clients are in that range.</p>
-          <div id="fundValueChart"></div>
-          <p class="sub" style="margin:20px 0 4px;">Plan Summary</p>
-          <div id="planSummaryList"></div>
-        </div>
-      </div>
-
       <!-- DUES CLIENTS -->
       <div class="card" id="duesClientsCard">
         <div class="card-header-row" id="duesClientsHeader">
@@ -1712,19 +1696,6 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
         </div>
       </div>
 
-      <!-- LAPSED POLICIES — display-only, no reminder toggle since
-           lapsed policies never get dues reminders in the first place -->
-      <div class="card" id="lapsedClientsCard">
-        <div class="card-header-row" id="lapsedClientsHeader">
-          <h2 style="margin:0;">Lapsed Policies</h2>
-          <button class="collapse-toggle" id="toggleLapsedClients" aria-label="Collapse">&#8943;</button>
-        </div>
-        <div id="lapsedClientsBody">
-          <p class="sub" id="lapsedClientsSub">Loading lapsed policies…</p>
-          <div id="lapsedClientsList" style="max-height:400px;overflow-y:auto;padding:12px 16px;border:1px solid #e7dfcf;border-radius:6px;"></div>
-        </div>
-      </div>
-
       <!-- BIRTHDAY CLIENTS -->
       <div class="card" id="birthdayClientsCard">
         <div class="card-header-row" id="birthdayClientsHeader">
@@ -1750,6 +1721,44 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
             <button class="btn-gold" id="saveBirthdayPreferences" style="display:flex;align-items:center;justify-content:center;gap:7px;margin-left:8px;">✓ SAVE CHANGES</button>
           </div>
           <div class="status" id="birthdayClientsStatus"></div>
+        </div>
+      </div>
+
+      <!-- SUMMARY CHARTS — Fund Value distribution and per-plan counts,
+           drawn as plain <canvas> bar charts so this stays a single,
+           self-contained file with no extra chart library dependency. -->
+      <div class="card" id="clientsSummaryCard">
+        <div class="card-header-row" id="clientsSummaryHeader">
+          <h2 style="margin:0;">Client Summary</h2>
+          <button class="collapse-toggle" id="toggleClientsSummary" aria-label="Collapse">&#8943;</button>
+        </div>
+        <div id="clientsSummaryBody">
+          <p class="sub" style="margin-bottom:4px;">Fund Value Distribution</p>
+          <p style="font-size:11px; color:#9CA3AF; margin:0 0 8px;">Tap a bar to see which clients are in that range.</p>
+          <div id="fundValueChart"></div>
+
+          <div style="display:flex; justify-content:space-between; align-items:center; margin:20px 0 4px;">
+            <p class="sub" style="margin:0;">Plan Summary</p>
+            <button type="button" id="togglePlanSummary" class="collapse-toggle" aria-label="Collapse">&#8943;</button>
+          </div>
+          <div id="planSummaryWrap">
+            <p style="font-size:11px; color:#9CA3AF; margin:0 0 8px;">Tap a plan to see its clients, ranked by issue date.</p>
+            <div id="planSummaryList"></div>
+            <button type="button" id="planSummaryShowAllBtn" style="display:none; width:100%; margin-top:10px; padding:8px; background:none; border:1px dashed #ddd; border-radius:8px; color:#0C447C; font-size:12px; font-weight:600; cursor:pointer;"></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- LAPSED POLICIES — display-only, no reminder toggle since
+           lapsed policies never get dues reminders in the first place -->
+      <div class="card" id="lapsedClientsCard">
+        <div class="card-header-row" id="lapsedClientsHeader">
+          <h2 style="margin:0;">Lapsed Policies</h2>
+          <button class="collapse-toggle" id="toggleLapsedClients" aria-label="Collapse">&#8943;</button>
+        </div>
+        <div id="lapsedClientsBody">
+          <p class="sub" id="lapsedClientsSub">Loading lapsed policies…</p>
+          <div id="lapsedClientsList" style="max-height:400px;overflow-y:auto;padding:12px 16px;border:1px solid #e7dfcf;border-radius:6px;"></div>
         </div>
       </div>
 
@@ -2787,7 +2796,8 @@ function parseDuesFromWorkbook(workbook){
   const idxEmail        = findColumn(headers, claimed, ['email address','email'], ['email','e-mail','mail']);
   const idxPolicyNumber = findColumn(headers, claimed, ['policy number','policy no'], ['policy number','policy no','policy']);
   const idxDueDate       = findColumn(headers, claimed, ['premium due date','due date'], ['due date','renewal date','anniversary date','due']);
-  const idxLapseDate     = findColumn(headers, claimed, ['lapse date','date lapsed'], ['lapse date','lapsed date','date lapsed']);
+  const idxLapseDate     = findColumn(headers, claimed, ['lapsed/cease date','lapse date','date lapsed'], ['lapsed/cease','cease date','lapse date','lapsed date','date lapsed']);
+  const idxIssuedDate    = findColumn(headers, claimed, ['issue date','issued date','date issued'], ['issue date','issued date','date issued','inception date','effective date']);
   const idxStatus        = findColumn(headers, claimed, ['policy status','status'], ['status']);
   const idxMode          = findColumn(headers, claimed, ['premium mode','payment mode'], ['mode','frequency']);
   const idxProduct       = findColumn(headers, claimed, ['policy name','product name','plan name'], ['product','plan','description']);
@@ -2843,6 +2853,13 @@ function parseDuesFromWorkbook(workbook){
       if (!isNaN(parsedLapseDate.getTime())) lapseDate = parsedLapseDate.toISOString();
     }
 
+    let issuedDate = null;
+    if (idxIssuedDate !== -1){
+      const issuedDateRaw = r[idxIssuedDate];
+      const parsedIssuedDate = issuedDateRaw instanceof Date ? issuedDateRaw : new Date(String(issuedDateRaw));
+      if (!isNaN(parsedIssuedDate.getTime())) issuedDate = parsedIssuedDate.toISOString();
+    }
+
     // Prefer a "total premium" style column when present and nonzero (the
     // actual amount currently due); fall back to a plain premium amount
     // column when that's all the export provides.
@@ -2871,6 +2888,9 @@ function parseDuesFromWorkbook(workbook){
       // Date, since the export tracks exactly when a policy actually
       // lapsed separately from its regular premium due date.
       lapseDate: lapseDate,
+      // When policy was originally issued — used to rank clients within
+      // a plan's breakdown (Plan Summary), independent of Due Date.
+      issuedDate: issuedDate,
       policyStatus: policyStatus,
       isPaidUp: isPaidUp,
       isLapsed: isLapsed
@@ -6051,6 +6071,12 @@ let allLapsedClients = [];
 let allBirthdayClients = [];
 let duesPageOffset = 0;
 let lapsedPageOffset = 0;
+// Tracks the currently selected sort mode so renderDuesClientsList can
+// decide what to show on the right side of each row: Due Amount when
+// sorted by Due Date, or Fund Value when sorted by Fund Value — showing
+// whichever value the person is actually sorting by, rather than always
+// showing Due Amount regardless of what they're looking at.
+let currentDuesSortMode = 'dueDate';
 let birthdayPageOffset = 0;
 const CLIENTS_PER_PAGE = 10;
 
@@ -6187,6 +6213,7 @@ function filterDuesClients(){
   const query = input.value.toLowerCase().trim();
   const planValue = planFilter ? planFilter.value : '';
   const sortMode = sortSelect ? sortSelect.value : 'dueDate';
+  currentDuesSortMode = sortMode;
 
   if (!allDuesClients || allDuesClients.length === 0){
     if (countEl) countEl.textContent = '';
@@ -6304,15 +6331,26 @@ function renderDuesClientsList(clients, append = false){
     const dataKey = 'dues-' + policyKey.replace(/[^a-zA-Z0-9-_]/g, '-');
     const statusLower = String(client.policyStatus || '').toLowerCase();
     const isPaidUp = statusLower.includes('paid-up') || statusLower.includes('paid up');
-    const dueLine = isPaidUp
-      ? '<span style="display:inline-block;background:var(--good,#27AE60);color:#fff;font-size:9px;font-weight:700;padding:1px 6px;border-radius:100px;letter-spacing:.3px;margin-right:6px;vertical-align:middle;">PAID-UP</span>No further dues'
-      : 'Due: ' + formatDateDisplay(client.dueDate);
+    // The sub-line under the client's name shows whichever metric the
+    // person is actually sorting by — Due Date info (as before) for the
+    // default/Due Date/Name sorts, or Fund Value when sorted by Fund
+    // Value, so the value driving the current order is always visible
+    // right under the name rather than only implied by position.
+    const isSortedByFundValue = currentDuesSortMode === 'fundValueDesc' || currentDuesSortMode === 'fundValueAsc';
+    let subLine;
+    if (isSortedByFundValue){
+      subLine = 'Fund Value: PHP ' + Number(client.fundValue || 0).toLocaleString('en-PH', {minimumFractionDigits: 2});
+    } else if (isPaidUp){
+      subLine = '<span style="display:inline-block;background:var(--good,#27AE60);color:#fff;font-size:9px;font-weight:700;padding:1px 6px;border-radius:100px;letter-spacing:.3px;margin-right:6px;vertical-align:middle;">PAID-UP</span>No further dues';
+    } else {
+      subLine = 'Due: ' + formatDateDisplay(client.dueDate);
+    }
     html += `
       <label style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:#FDF8F0;border-radius:8px;cursor:pointer;transition:background .15s;">
         <input type="checkbox" ${checked} data-key="${dataKey}" data-policy="${escapeHtml(policyKey)}" class="dues-preference-toggle" style="width:18px;height:18px;cursor:pointer;">
         <div style="flex:1;min-width:0;">
           <div style="font-weight:600;color:#0C447C;font-size:13px;">${escapeHtml(client.clientName)}</div>
-          <div style="font-size:11px;color:#6B7280;">${escapeHtml(client.product)} • ${dueLine}</div>
+          <div style="font-size:11px;color:#6B7280;">${escapeHtml(client.product)} • ${subLine}</div>
         </div>
         <div style="font-size:13px;font-weight:600;color:#0C447C;">PHP ${Number(client.premiumAmount || 0).toLocaleString('en-PH', {minimumFractionDigits: 2})}</div>
       </label>
@@ -6509,8 +6547,11 @@ function renderFundValueChart(){
         : '<div style="max-height:220px; overflow-y:auto;">' + expandedBucket.clients
             .slice().sort((a, b) => (Number(b.fundValue)||0) - (Number(a.fundValue)||0))
             .map(c => `
-              <div style="display:flex; justify-content:space-between; padding:5px 0; border-bottom:1px solid #EFE6D2; font-size:12px;">
-                <span style="color:#374151; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding-right:8px;">${escapeHtml(c.clientName || '(no name)')}</span>
+              <div style="display:flex; justify-content:space-between; align-items:baseline; padding:5px 0; border-bottom:1px solid #EFE6D2; font-size:12px; gap:8px;">
+                <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0;">
+                  <span style="color:#374151;">${escapeHtml(c.clientName || '(no name)')}</span>
+                  ${c.product ? '<span style="color:#9CA3AF; font-size:11px;"> \u2014 ' + escapeHtml(c.product) + '</span>' : ''}
+                </span>
                 <span style="font-weight:600; color:#0C447C; flex-shrink:0;">PHP ${Number(c.fundValue||0).toLocaleString('en-PH', {minimumFractionDigits:2})}</span>
               </div>
             `).join('') + '</div>'
@@ -6532,6 +6573,7 @@ function renderFundValueChart(){
 }
 
 // Plan Summary — counts how many dues clients (Premium Paying +
+// Plan Summary — counts how many dues clients (Premium Paying +
 // Paid-Up) fall under each distinct product/plan name, sorted by
 // count descending so the most common plan shows first.
 // Plan Summary rendered as a ranked list rather than a bar chart —
@@ -6542,35 +6584,101 @@ function renderFundValueChart(){
 // categories, stays legible on a phone screen, and the small
 // proportional bar behind each row still gives an at-a-glance sense of
 // scale without needing the space a full chart would require.
+//
+// Shows only the top 10 plans by default (a "Show all" button reveals
+// the rest), and tapping any plan row expands a breakdown of its
+// clients ranked by Issued Date (earliest first) — mirroring the same
+// tap-to-reveal interaction the Fund Value Distribution chart uses.
+const PLAN_SUMMARY_DEFAULT_LIMIT = 10;
+let planSummaryShowAll = false;
+let planSummaryExpandedPlan = null; // remembers which plan's breakdown is open
+
 function renderPlanSummaryList(){
   const container = document.getElementById('planSummaryList');
+  const showAllBtn = document.getElementById('planSummaryShowAllBtn');
   if (!container) return;
 
-  const countByPlan = {};
+  const clientsByPlan = {};
   allDuesClients.forEach(c => {
     const plan = (c.product || '').trim() || 'Unspecified';
-    countByPlan[plan] = (countByPlan[plan] || 0) + 1;
+    if (!clientsByPlan[plan]) clientsByPlan[plan] = [];
+    clientsByPlan[plan].push(c);
   });
-  const entries = Object.entries(countByPlan).sort((a, b) => b[1] - a[1]);
+  const entries = Object.entries(clientsByPlan).sort((a, b) => b[1].length - a[1].length);
 
   if (entries.length === 0){
     container.innerHTML = '<p style="color:#9CA3AF;font-size:13px;">No data yet</p>';
+    if (showAllBtn) showAllBtn.style.display = 'none';
     return;
   }
 
-  const maxCount = entries[0][1];
-  container.innerHTML = entries.map(([plan, count]) => {
+  const visibleEntries = planSummaryShowAll ? entries : entries.slice(0, PLAN_SUMMARY_DEFAULT_LIMIT);
+  const maxCount = entries[0][1].length;
+
+  container.innerHTML = visibleEntries.map(([plan, planClients]) => {
+    const count = planClients.length;
     const pct = maxCount > 0 ? Math.max((count / maxCount) * 100, 3) : 0; // min 3% so even small counts show a sliver
+    const isExpanded = planSummaryExpandedPlan === plan;
+    const breakdownHtml = isExpanded ? renderPlanBreakdownHtml(plan, planClients) : '';
     return `
-      <div style="position:relative; margin-bottom:8px; border-radius:8px; overflow:hidden; background:#FDF8F0;">
-        <div style="position:absolute; top:0; left:0; bottom:0; width:${pct}%; background:rgba(201,154,59,0.22);"></div>
-        <div style="position:relative; display:flex; justify-content:space-between; align-items:center; padding:8px 12px; font-size:13px;">
-          <span style="color:#374151; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding-right:10px;">${escapeHtml(plan)}</span>
-          <span style="font-weight:700; color:#0C447C; flex-shrink:0;">${count}</span>
+      <div>
+        <div class="plan-summary-row" data-plan="${escapeHtml(plan)}" style="position:relative; margin-bottom:8px; border-radius:8px; overflow:hidden; background:#FDF8F0; cursor:pointer;">
+          <div style="position:absolute; top:0; left:0; bottom:0; width:${pct}%; background:rgba(201,154,59,${isExpanded ? '0.35' : '0.22'});"></div>
+          <div style="position:relative; display:flex; justify-content:space-between; align-items:center; padding:8px 12px; font-size:13px;">
+            <span style="color:#374151; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding-right:10px;">${escapeHtml(plan)}</span>
+            <span style="font-weight:700; color:#0C447C; flex-shrink:0;">${count}</span>
+          </div>
         </div>
+        ${breakdownHtml}
       </div>
     `;
   }).join('');
+
+  container.querySelectorAll('.plan-summary-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const plan = row.dataset.plan;
+      // Tapping the already-open plan closes it; tapping a different
+      // one switches to it — same behavior as the Fund Value chart.
+      planSummaryExpandedPlan = (planSummaryExpandedPlan === plan) ? null : plan;
+      renderPlanSummaryList();
+    });
+  });
+
+  if (showAllBtn){
+    if (entries.length > PLAN_SUMMARY_DEFAULT_LIMIT){
+      showAllBtn.style.display = 'block';
+      showAllBtn.textContent = planSummaryShowAll
+        ? 'Show top ' + PLAN_SUMMARY_DEFAULT_LIMIT + ' only'
+        : 'Show all ' + entries.length + ' plans';
+    } else {
+      showAllBtn.style.display = 'none';
+    }
+  }
+}
+
+// Renders the expandable breakdown panel for one plan — its clients
+// ranked by Issued Date, earliest first. Clients with no issued date
+// (older exports without that column, or a blank cell for that row)
+// sort to the end rather than breaking the ranking.
+function renderPlanBreakdownHtml(plan, planClients){
+  const ranked = planClients.slice().sort((a, b) => {
+    const da = a.issuedDate || '9999-99-99';
+    const db = b.issuedDate || '9999-99-99';
+    return da < db ? -1 : da > db ? 1 : 0;
+  });
+  return `
+    <div style="margin:-2px 0 10px; padding:10px 12px; background:#FDF8F0; border:1px solid #E4DCC8; border-radius:8px;">
+      <div style="font-size:12px; font-weight:700; color:#0C447C; margin-bottom:8px;">${escapeHtml(plan)} \u2014 ${ranked.length} client${ranked.length === 1 ? '' : 's'}, ranked by issue date</div>
+      <div style="max-height:220px; overflow-y:auto;">
+        ${ranked.map(c => `
+          <div style="display:flex; justify-content:space-between; align-items:baseline; padding:5px 0; border-bottom:1px solid #EFE6D2; font-size:12px; gap:8px;">
+            <span style="color:#374151; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0;">${escapeHtml(c.clientName || '(no name)')}</span>
+            <span style="font-weight:600; color:#0C447C; flex-shrink:0;">${c.issuedDate ? formatDateDisplay(c.issuedDate) : 'No issue date'}</span>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
 }
 
 function redrawClientSummaryCharts(){
@@ -7016,6 +7124,17 @@ function setupClientsTab(){
     // would render at zero size — redraw once it's actually visible
     // again so the bars appear at the correct width.
     if (wasCollapsed) redrawClientSummaryCharts();
+  });
+
+  document.getElementById('togglePlanSummary')?.addEventListener('click', function(){
+    const wrap = document.getElementById('planSummaryWrap');
+    wrap.classList.toggle('collapsed');
+    this.classList.toggle('collapsed');
+  });
+
+  document.getElementById('planSummaryShowAllBtn')?.addEventListener('click', function(){
+    planSummaryShowAll = !planSummaryShowAll;
+    renderPlanSummaryList();
   });
 
   // Setup sidebar nav
