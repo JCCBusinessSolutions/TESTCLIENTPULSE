@@ -1023,6 +1023,14 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
     background: none; border: none; color: #EB5757; font-weight: 700;
     font-size: 12px; cursor: pointer; padding: 4px 8px;
   }
+  .bc-completed-row{
+    background: var(--cream, #FDF8F0); border: 1px solid var(--line, #E4DCC8);
+    border-left: 4px solid var(--good, #27AE60);
+    border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; font-size: 12.5px;
+  }
+  .bc-completed-row.has-failures{
+    border-left-color: var(--bad, #EB5757);
+  }
   .bc-picker-row{
     display: flex;
     align-items: center;
@@ -1780,6 +1788,11 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
         <div id="bcScheduledListWrap" style="margin-top:20px;">
           <label>Scheduled Broadcasts</label>
           <div id="bcScheduledList" style="font-size:13px; color:#9CA3AF;">No scheduled broadcasts.</div>
+        </div>
+
+        <div id="bcCompletedListWrap" style="margin-top:20px;">
+          <label>Completed Broadcasts</label>
+          <div id="bcCompletedList" style="font-size:13px; color:#9CA3AF;">No completed broadcasts yet.</div>
         </div>
 
         <div id="bcPreviewContainer" style="display:none; margin-top:16px; border:1px solid var(--line,#E4DCC8); border-radius:10px; overflow:hidden;">
@@ -3657,47 +3670,75 @@ function updateScheduleSummary(){
 // schedule/cancel action so the list always reflects the latest state.
 async function refreshScheduledBroadcastsList(){
   const container = el('bcScheduledList');
+  const completedContainer = el('bcCompletedList');
   try{
     const data = await callBackend({ action: 'getScheduledBroadcasts' });
     const schedules = (data && data.schedules) || [];
     const active = schedules.filter(s => s.status === 'scheduled' || s.status === 'sending');
+    const completed = schedules.filter(s => s.status === 'sent' || s.status === 'failed');
+
     if (active.length === 0){
       container.innerHTML = '<div style="font-size:13px; color:#9CA3AF;">No scheduled broadcasts.</div>';
-      return;
+    } else {
+      container.innerHTML = active.map(s => {
+        const when = new Date(s.scheduledFor).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+        const isSending = s.status === 'sending';
+        const progressLine = isSending
+          ? '<br><span style="color:var(--gold,#C99A3B); font-weight:700;">Sending\u2026 ' + (s.sentCount + s.failedCount) + ' processed so far</span>'
+          : '';
+        const editButton = isSending ? '' : '<button type="button" class="bc-scheduled-edit" data-id="' + escapeHtml(s.scheduleId) + '">EDIT</button>';
+        return '<div class="bc-scheduled-row">'
+          + '<span style="flex:1 1 auto; min-width:0;"><strong>' + escapeHtml(s.subject || '(no subject)') + '</strong><br>' + when + progressLine + '</span>'
+          + editButton
+          + '<button type="button" class="bc-scheduled-cancel" data-id="' + escapeHtml(s.scheduleId) + '">CANCEL</button>'
+          + '</div>';
+      }).join('');
+      container.querySelectorAll('.bc-scheduled-cancel').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          btn.disabled = true;
+          btn.textContent = '...';
+          try{
+            await callBackend({ action: 'cancelScheduledBroadcast', scheduleId: btn.dataset.id });
+            await refreshScheduledBroadcastsList();
+          }catch(err){
+            showStatus('broadcastStatus','error','Could not cancel: ' + err.message);
+          }
+        });
+      });
+      container.querySelectorAll('.bc-scheduled-edit').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const schedule = active.find(s => s.scheduleId === btn.dataset.id);
+          if (schedule) loadScheduleIntoEditor(schedule);
+        });
+      });
     }
-    container.innerHTML = active.map(s => {
-      const when = new Date(s.scheduledFor).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
-      const isSending = s.status === 'sending';
-      const progressLine = isSending
-        ? '<br><span style="color:var(--gold,#C99A3B); font-weight:700;">Sending\u2026 ' + (s.sentCount + s.failedCount) + ' processed so far</span>'
-        : '';
-      const editButton = isSending ? '' : '<button type="button" class="bc-scheduled-edit" data-id="' + escapeHtml(s.scheduleId) + '">EDIT</button>';
-      return '<div class="bc-scheduled-row">'
-        + '<span style="flex:1 1 auto; min-width:0;"><strong>' + escapeHtml(s.subject || '(no subject)') + '</strong><br>' + when + progressLine + '</span>'
-        + editButton
-        + '<button type="button" class="bc-scheduled-cancel" data-id="' + escapeHtml(s.scheduleId) + '">CANCEL</button>'
-        + '</div>';
-    }).join('');
-    container.querySelectorAll('.bc-scheduled-cancel').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        btn.disabled = true;
-        btn.textContent = '...';
-        try{
-          await callBackend({ action: 'cancelScheduledBroadcast', scheduleId: btn.dataset.id });
-          await refreshScheduledBroadcastsList();
-        }catch(err){
-          showStatus('broadcastStatus','error','Could not cancel: ' + err.message);
-        }
-      });
-    });
-    container.querySelectorAll('.bc-scheduled-edit').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const schedule = active.find(s => s.scheduleId === btn.dataset.id);
-        if (schedule) loadScheduleIntoEditor(schedule);
-      });
-    });
+
+    // Completed broadcasts (status 'sent' or 'failed') — shows exactly
+    // how many recipients actually received the email vs failed, for
+    // every past scheduled broadcast, most recent first. This is the
+    // only place in the app itself (rather than the underlying Sheet)
+    // where the advisor can see that outcome after the fact.
+    if (completed.length === 0){
+      completedContainer.innerHTML = '<div style="font-size:13px; color:#9CA3AF;">No completed broadcasts yet.</div>';
+    } else {
+      completed.sort((a, b) => new Date(b.sentAt || b.createdAt) - new Date(a.sentAt || a.createdAt));
+      completedContainer.innerHTML = completed.slice(0, 20).map(s => {
+        const when = s.sentAt ? new Date(s.sentAt).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }) : '\u2014';
+        const hasFailures = s.failedCount > 0;
+        const resultLine = hasFailures
+          ? '<span style="color:var(--bad,#EB5757); font-weight:700;">' + s.sentCount + ' sent, ' + s.failedCount + ' failed</span>'
+          : '<span style="color:var(--good,#27AE60); font-weight:700;">' + s.sentCount + ' sent</span>';
+        const errorLine = s.error ? '<div style="font-size:11px; color:#9CA3AF; margin-top:4px; word-break:break-word;">' + escapeHtml(s.error.length > 150 ? s.error.substring(0, 150) + '\u2026' : s.error) + '</div>' : '';
+        return '<div class="bc-completed-row' + (hasFailures ? ' has-failures' : '') + '">'
+          + '<strong>' + escapeHtml(s.subject || '(no subject)') + '</strong><br>'
+          + '<span style="color:#9CA3AF;">' + when + '</span> \u2014 ' + resultLine
+          + errorLine
+          + '</div>';
+      }).join('');
+    }
   }catch(err){
     container.innerHTML = '<div style="font-size:13px; color:#9CA3AF;">Could not load scheduled broadcasts.</div>';
+    completedContainer.innerHTML = '<div style="font-size:13px; color:#9CA3AF;">Could not load completed broadcasts.</div>';
   }
 }
 
