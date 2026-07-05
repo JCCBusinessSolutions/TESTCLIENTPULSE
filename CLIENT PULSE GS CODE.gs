@@ -536,6 +536,7 @@ function doPost(e){
   if (body.action === 'sendBroadcastBatch')     { try{ return jsonResponse(Object.assign({ success: true }, sendBroadcastEmailBatch(body.rows || [], body.subject || '', body.htmlBody || '', body.attachments || [], body.useTemplate))); }catch(err){ return jsonResponse({ success: false, error: toEnglishErrorMessage(err.message) }); } }
   if (body.action === 'scheduleBroadcast')      { try{ return jsonResponse(scheduleBroadcast(body.scheduledFor, body.payload)); }catch(err){ return jsonResponse({ success: false, error: toEnglishErrorMessage(err.message) }); } }
   if (body.action === 'cancelScheduledBroadcast') { try{ return jsonResponse(cancelScheduledBroadcast(body.scheduleId)); }catch(err){ return jsonResponse({ success: false, error: toEnglishErrorMessage(err.message) }); } }
+  if (body.action === 'deleteCompletedBroadcast') { try{ return jsonResponse(deleteCompletedBroadcast(body.scheduleId)); }catch(err){ return jsonResponse({ success: false, error: toEnglishErrorMessage(err.message) }); } }
   if (body.action === 'getScheduledBroadcasts') { try{ return jsonResponse({ schedules: getScheduledBroadcasts() }); }catch(err){ return jsonResponse({ success: false, error: toEnglishErrorMessage(err.message) }); } }
   if (body.action === 'editScheduledBroadcast') { try{ return jsonResponse(editScheduledBroadcast(body.scheduleId, body.scheduledFor, body.payload)); }catch(err){ return jsonResponse({ success: false, error: toEnglishErrorMessage(err.message) }); } }
   if (body.action === 'getScheduledBroadcastPayload') { try{ return jsonResponse(getScheduledBroadcastPayload(body.scheduleId)); }catch(err){ return jsonResponse({ success: false, error: toEnglishErrorMessage(err.message) }); } }
@@ -1376,6 +1377,31 @@ function cancelScheduledBroadcast(scheduleId){
     }
   }
   return { success: false, error: 'Schedule not found.' };
+}
+
+// Permanently removes a finished broadcast's row so it stops cluttering
+// the Completed Broadcasts list on the dashboard. Only allowed for
+// broadcasts that are actually done (sent/failed) — a scheduled or
+// currently-sending broadcast still has a live trigger and recipients
+// waiting, so those must go through cancelScheduledBroadcast instead,
+// which also cleans up that trigger before removing anything.
+function deleteCompletedBroadcast(scheduleId){
+  const sheet = setupScheduleSheet();
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+  const col = name => headers.indexOf(name);
+
+  for (let i = 1; i < data.length; i++){
+    if (String(data[i][col('Schedule ID')]) === String(scheduleId)){
+      const status = data[i][col('Status')];
+      if (status !== 'sent' && status !== 'failed'){
+        return { success: false, error: 'Only completed (sent or failed) broadcasts can be removed this way \u2014 cancel it instead if it\u2019s still scheduled or sending.' };
+      }
+      sheet.deleteRow(i + 1);
+      return { success: true };
+    }
+  }
+  return { success: false, error: 'Broadcast not found.' };
 }
 
 // Edits an already-queued scheduled broadcast — the message, recipients,
