@@ -18,7 +18,7 @@ const BIRTHDAY_HEADERS = ['Full Name','Email','Contact Number','Location','Date 
 // Sheet cells comfortably hold much larger text. TriggerId lets a
 // scheduled send be cancelled later by deleting its specific trigger.
 const SCHEDULE_SHEET_NAME = 'Scheduled Broadcasts';
-const SCHEDULE_HEADERS = ['Schedule ID','Scheduled For','Subject','PayloadJSON','TriggerId','Status','Created At','Sent At','Error'];
+const SCHEDULE_HEADERS = ['Schedule ID','Scheduled For','Subject','PayloadJSON','TriggerId','Status','Created At','Sent At','Error','SentCount','FailedCount'];
 
 // Broadcast Drafts: saved (not sent, not scheduled) messages an advisor
 // can come back to and finish later, or reuse as a starting point for
@@ -252,6 +252,16 @@ function setupScheduleSheet(){
   if (sheet.getLastRow() === 0){
     sheet.appendRow(SCHEDULE_HEADERS);
     sheet.setFrozenRows(1);
+  } else {
+    // Existing sheets created before SentCount/FailedCount existed —
+    // append any missing columns at the end rather than inserting them
+    // mid-row, so nothing already in the sheet shifts position.
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    SCHEDULE_HEADERS.forEach(h => {
+      if (!headers.includes(h)){
+        sheet.getRange(1, sheet.getLastColumn() + 1).setValue(h);
+      }
+    });
   }
   return sheet;
 }
@@ -1164,6 +1174,20 @@ function scheduleBroadcast(scheduledFor, payload){
 // time-based triggers can't pass custom data, this looks itself up by
 // matching the trigger's own unique ID against the TriggerId column —
 // whichever row matches is the schedule that just came due.
+// Apps Script kills a running script outright once it hits its 6-minute
+// execution limit — this does NOT throw a catchable exception, so a
+// broadcast to 100+ recipients (each GmailApp.sendEmail() call taking a
+// meaningful fraction of a second) could previously get partway through
+// sending, hit the time limit, and simply stop — leaving the Error
+// column blank and Status stuck wherever it happened to be, since the
+// script never reached the line that would have recorded a failure.
+// This processes recipients in small time-boxed chunks instead of all
+// at once, checking elapsed time frequently, and — if a chunk finishes
+// but recipients remain — creates a new one-time trigger to pick up
+// exactly where this run left off, chaining across as many trigger
+// firings as needed rather than risking one long, uninterruptible run.
+const SCHEDULED_BROADCAST_MAX_RUNTIME_MS = 4.5 * 60 * 1000; // 4.5 min, safely under the 6-minute hard limit
+
 function runScheduledBroadcastTrigger(e){
   const triggerId = e && e.triggerUid ? e.triggerUid : null;
   const sheet = setupScheduleSheet();
@@ -1196,33 +1220,86 @@ function runScheduledBroadcastTrigger(e){
     return; // person cancelled it before it fired — do nothing
   }
 
+  const startTime = Date.now();
+  const sentCountCol = col('SentCount');
+  const failedCountCol = col('FailedCount');
+  const alreadySent = Number(data[rowIndex][sentCountCol]) || 0;
+  const alreadyFailed = Number(data[rowIndex][failedCountCol]) || 0;
+
   try{
     const payload = JSON.parse(data[rowIndex][col('PayloadJSON')] || '{}');
-    const result = sendBroadcastEmailBatch(
-      payload.rows || [],
-      payload.subject || '',
-      payload.htmlBody || '',
-      payload.attachments || [],
-      payload.useTemplate
-    );
-    // "sent" only means every intended recipient actually received it —
-    // 0 sent with 1+ failed is a real failure, not a success with some
-    // stragglers, so the status should say so plainly rather than
-    // showing "sent" next to an error that contradicts it.
-    const allFailed = result.sent === 0 && result.failed > 0;
-    sheet.getRange(rowNum, col('Status') + 1).setValue(allFailed ? 'failed' : 'sent');
-    sheet.getRange(rowNum, col('Sent At') + 1).setValue(new Date());
-    // Log the ACTUAL reason(s) each recipient failed, not just a count —
-    // a bare "0 sent, 1 failed" gives no way to diagnose what went
-    // wrong. failureReasons already carries this detail per-recipient;
-    // this just surfaces it instead of discarding it.
-    let errorDetail = '';
-    if (result.failed > 0 && result.failureReasons && result.failureReasons.length > 0){
-      errorDetail = result.failureReasons.map(fr => fr.email + ': ' + fr.reason).join(' | ');
-    } else if (result.failed > 0){
-      errorDetail = result.sent + ' sent, ' + result.failed + ' failed';
+    const allRows = payload.rows || [];
+    const remainingRows = allRows.slice(alreadySent + alreadyFailed);
+
+    if (remainingRows.length === 0){
+      // Nothing left to send (shouldn't normally happen, but covers the
+      // edge case of a schedule with zero recipients).
+      sheet.getRange(rowNum, col('Status') + 1).setValue('sent');
+      sheet.getRange(rowNum, col('Sent At') + 1).setValue(new Date());
+      return;
     }
-    sheet.getRange(rowNum, col('Error') + 1).setValue(errorDetail);
+
+    // Small batches (10 recipients per sendBroadcastEmailBatch call)
+    // rather than one giant call for everyone, or one call per single
+    // recipient — a single call for 100+ recipients is exactly what
+    // silently hit the 6-minute execution wall with no error logged,
+    // while calling once per individual recipient would repeat the
+    // header/footer size validation (a Drive lookup) 100+ times,
+    // adding real overhead against the same time budget this is meant
+    // to protect. Checking elapsed time between each small batch is
+    // frequent enough to stop safely with time to spare.
+    const CHUNK_SIZE = 10;
+    let chunkSent = 0, chunkFailed = 0;
+    const chunkFailureReasons = [];
+
+    for (let i = 0; i < remainingRows.length; i += CHUNK_SIZE){
+      if (Date.now() - startTime > SCHEDULED_BROADCAST_MAX_RUNTIME_MS){
+        break; // time's up for this run — whatever's left continues in the next chained trigger
+      }
+      const batchSlice = remainingRows.slice(i, i + CHUNK_SIZE);
+      const batchResult = sendBroadcastEmailBatch(
+        batchSlice,
+        payload.subject || '',
+        payload.htmlBody || '',
+        payload.attachments || [],
+        payload.useTemplate
+      );
+      chunkSent += batchResult.sent;
+      chunkFailed += batchResult.failed;
+      if (batchResult.failureReasons) chunkFailureReasons.push(...batchResult.failureReasons);
+    }
+
+    const newSentCount = alreadySent + chunkSent;
+    const newFailedCount = alreadyFailed + chunkFailed;
+    const totalProcessed = newSentCount + newFailedCount;
+    const stillRemaining = allRows.length - totalProcessed;
+
+    sheet.getRange(rowNum, sentCountCol + 1).setValue(newSentCount);
+    sheet.getRange(rowNum, failedCountCol + 1).setValue(newFailedCount);
+
+    if (chunkFailureReasons.length > 0){
+      const existingError = String(data[rowIndex][col('Error')] || '');
+      const newErrorText = chunkFailureReasons.map(fr => fr.email + ': ' + fr.reason).join(' | ');
+      sheet.getRange(rowNum, col('Error') + 1).setValue(
+        existingError ? existingError + ' | ' + newErrorText : newErrorText
+      );
+    }
+
+    if (stillRemaining > 0){
+      // Not finished — chain a new trigger to continue almost
+      // immediately (a few seconds out is the minimum Apps Script
+      // allows), rather than leaving the rest unsent.
+      const continuationTrigger = ScriptApp.newTrigger('runScheduledBroadcastTrigger')
+        .timeBased()
+        .after(5000)
+        .create();
+      sheet.getRange(rowNum, col('TriggerId') + 1).setValue(continuationTrigger.getUniqueId());
+      sheet.getRange(rowNum, col('Status') + 1).setValue('sending');
+    } else {
+      const allFailed = newSentCount === 0 && newFailedCount > 0;
+      sheet.getRange(rowNum, col('Status') + 1).setValue(allFailed ? 'failed' : 'sent');
+      sheet.getRange(rowNum, col('Sent At') + 1).setValue(new Date());
+    }
   }catch(err){
     // Per the advisor's own instruction: if anything is missing or
     // broken by the time this fires (recipient list changed, Setup URL
@@ -1251,7 +1328,9 @@ function getScheduledBroadcasts(){
       status: row[col('Status')],
       createdAt: row[col('Created At')] instanceof Date ? row[col('Created At')].toISOString() : String(row[col('Created At')]),
       sentAt: row[col('Sent At')] instanceof Date ? row[col('Sent At')].toISOString() : String(row[col('Sent At')] || ''),
-      error: row[col('Error')] || ''
+      error: row[col('Error')] || '',
+      sentCount: Number(row[col('SentCount')]) || 0,
+      failedCount: Number(row[col('FailedCount')]) || 0
     });
   }
   result.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
@@ -1328,6 +1407,9 @@ function editScheduledBroadcast(scheduleId, scheduledFor, payload){
   }
   const rowNum = rowIndex + 1;
   const currentStatus = data[rowIndex][col('Status')];
+  if (currentStatus === 'sending'){
+    return { success: false, error: 'This broadcast is currently sending and can\u2019t be edited right now \u2014 wait for it to finish, or cancel it to stop the remaining recipients.' };
+  }
   if (currentStatus !== 'scheduled'){
     return { success: false, error: 'This broadcast already ' + currentStatus + ' and can no longer be edited.' };
   }
@@ -1341,17 +1423,33 @@ function editScheduledBroadcast(scheduleId, scheduledFor, payload){
     if (newDate.getTime() <= Date.now()){
       return { success: false, error: 'Scheduled time must be in the future.' };
     }
-    const oldTriggerId = data[rowIndex][col('TriggerId')];
-    if (oldTriggerId){
-      ScriptApp.getProjectTriggers().forEach(t => {
-        if (t.getUniqueId() === oldTriggerId) ScriptApp.deleteTrigger(t);
-      });
-    }
+    // Create the new trigger FIRST, before deleting the old one — if
+    // trigger creation is going to fail (e.g. the project has hit
+    // Apps Script's per-user trigger limit), it's better to fail with
+    // the old schedule still intact than to have already deleted the
+    // working trigger and then fail to replace it, which would leave
+    // this broadcast silently unscheduled with no trigger at all.
     const newTrigger = ScriptApp.newTrigger('runScheduledBroadcastTrigger')
       .timeBased()
       .at(newDate)
       .create();
     newTriggerId = newTrigger.getUniqueId();
+
+    const oldTriggerId = data[rowIndex][col('TriggerId')];
+    if (oldTriggerId && oldTriggerId !== newTriggerId){
+      // getProjectTriggers() scans every trigger across every feature
+      // in this project (daily reminders, birthday greetings, every
+      // other scheduled broadcast) — with many broadcasts queued this
+      // can be slow enough to push total execution time toward the
+      // 30-second Web App limit, which surfaces to the browser as a
+      // raw network failure ("Load failed") rather than a clean error.
+      // This still does the scan, but only once, after the new trigger
+      // already exists, so a slow scan here never risks leaving the
+      // broadcast without any working trigger.
+      ScriptApp.getProjectTriggers().forEach(t => {
+        if (t.getUniqueId() === oldTriggerId) ScriptApp.deleteTrigger(t);
+      });
+    }
     sheet.getRange(rowNum, col('Scheduled For') + 1).setValue(newDate);
     sheet.getRange(rowNum, col('TriggerId') + 1).setValue(newTriggerId);
   }
