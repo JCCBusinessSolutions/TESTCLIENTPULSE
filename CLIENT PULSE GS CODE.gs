@@ -475,6 +475,7 @@ function doGet(e){
   const action = e.parameter.action;
   if (action === 'getDuesClientList')         return jsonResponse({ clients: getDuesClientList() });
   if (action === 'getBirthdayClientList')     return jsonResponse({ clients: getBirthdayClientList() });
+  if (action === 'getRemainingEmailQuota')    return jsonResponse(getRemainingEmailQuota());
   if (action === 'getDueToday')               return jsonResponse({ rows: getDueTodayRows() });
   if (action === 'getConfig')                 return jsonResponse({ config: getBrandConfig() });
   if (action === 'getImagePreview')           return jsonResponse(getImagePreviewData(e.parameter.target));
@@ -1008,6 +1009,18 @@ function sendBirthdayEmail(row, col){
 // references + inlineImages — this is the reliable method real email
 // clients render correctly, unlike data-URL images which many inboxes
 // (including Gmail's own web client in some cases) strip or block.
+// Personal Gmail accounts (the common case for individual advisors) are
+// capped at 100 email recipients per rolling 24-hour period; Google
+// Workspace accounts get up to 1,500/day. Checking this before a large
+// broadcast starts sending lets the advisor see the real ceiling and
+// decide how to proceed, rather than discovering it partway through a
+// send when a batch fails with a generic quota error and no context
+// for how much of the list actually has a realistic chance of going out
+// today.
+function getRemainingEmailQuota(){
+  return { remaining: MailApp.getRemainingDailyQuota() };
+}
+
 function sendBroadcastEmailBatch(rows, subject, htmlBody, attachments, useTemplate){
   const config = getBrandConfig();
   // Broadcast Email only strictly needs a sender name — header/footer
@@ -1140,7 +1153,18 @@ function sendBroadcastEmailBatch(rows, subject, htmlBody, attachments, useTempla
     }catch(err){
       failed++;
       failedEmails.push(r.email);
-      failureReasons.push({ email: r.email, reason: toEnglishErrorMessage(err.message || String(err)) });
+      const translatedReason = toEnglishErrorMessage(err.message || String(err));
+      // If this is a size-related failure, attach the exact numbers our
+      // own pre-check calculated for this send — htmlBody bytes, the
+      // template's combined size, and the attachment total — so if
+      // Gmail rejects a send that our pre-check considered safe, the
+      // actual breakdown is visible immediately instead of having to
+      // guess again which component the pre-check is undercounting.
+      const isSizeRelated = /too large|limit exceeded|laki ng body/i.test(translatedReason);
+      const diagnosticSuffix = isSizeRelated
+        ? ' [diagnostic: htmlBody=' + (htmlBodyBytes/1024).toFixed(0) + 'KB, template=' + templateMB.toFixed(2) + 'MB, attachments=' + (attachmentBytesTotal/1024/1024).toFixed(2) + 'MB, precheck total=' + totalMB.toFixed(2) + 'MB]'
+        : '';
+      failureReasons.push({ email: r.email, reason: translatedReason + diagnosticSuffix });
     }
   });
 
