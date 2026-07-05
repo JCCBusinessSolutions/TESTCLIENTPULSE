@@ -216,6 +216,8 @@
   #duesClientsBody.collapsed{ display:none; }
   #birthdayClientsBody.collapsed{ display:none; }
   #planSummaryWrap.collapsed{ display:none; }
+  #clientsSummaryBody.collapsed{ display:none; }
+  #lapsedClientsBody.collapsed{ display:none; }
 
   /* ============================================================
      NEW DASHBOARD CHROME — sidebar, hero, KPIs, mobile nav.
@@ -424,6 +426,58 @@
   body.dark-mode #fileDrop p:last-of-type{ color:#8DA0BC !important; }
   body.dark-mode #birthdayFileDrop p{ color:#FFFFFF !important; }
   body.dark-mode #birthdayFileDrop p:last-of-type{ color:#8DA0BC !important; }
+
+  /* Client Summary and Lapsed Policies specifically go full dark navy
+     in night mode (unlike most .card elements, which intentionally stay
+     light per the app's usual pattern) — every element inside needs its
+     own adjustment since they were originally styled assuming a light
+     card background. */
+  body.dark-mode #clientsSummaryCard,
+  body.dark-mode #lapsedClientsCard{
+    background:#16233A !important;
+    border-color:#27374D !important;
+  }
+  body.dark-mode #clientsSummaryCard h2,
+  body.dark-mode #lapsedClientsCard h2{
+    color:#FFFFFF !important;
+  }
+  body.dark-mode #clientsSummaryCard .sub,
+  body.dark-mode #lapsedClientsCard .sub,
+  body.dark-mode #clientsSummaryCard p[style*="color:#9CA3AF"],
+  body.dark-mode #lapsedClientsCard p[style*="color:#9CA3AF"]{
+    color:#8DA0BC !important;
+  }
+  /* Fund Value bar chart: bar-name labels and value labels rendered as
+     plain divs with inline navy/gray colors — swap to light equivalents. */
+  body.dark-mode #fundValueChart div[style*="color:#0C447C"]{ color:#FFFFFF !important; }
+  body.dark-mode #fundValueChart div[style*="color:#6B7280"]{ color:#8DA0BC !important; }
+  /* Fund Value breakdown panel (revealed on tap) and its client rows */
+  body.dark-mode #fvBreakdownPanel{
+    background:#1B2A42 !important;
+    border-color:#27374D !important;
+  }
+  body.dark-mode #fvBreakdownPanel div[style*="color:#0C447C"]{ color:#FFFFFF !important; }
+  body.dark-mode #fvBreakdownPanel span[style*="color:#374151"]{ color:#E8EDF5 !important; }
+  body.dark-mode #fvBreakdownPanel span[style*="color:#0C447C"]{ color:#FFFFFF !important; }
+  body.dark-mode #fvBreakdownPanel span[style*="color:#9CA3AF"]{ color:#8DA0BC !important; }
+  body.dark-mode #fvBreakdownPanel div[style*="border-bottom:1px solid #EFE6D2"]{ border-bottom-color:#27374D !important; }
+  /* Plan Summary rows and their expandable breakdown panels */
+  body.dark-mode .plan-summary-row{ background:#1B2A42 !important; }
+  body.dark-mode .plan-summary-row span[style*="color:#374151"]{ color:#E8EDF5 !important; }
+  body.dark-mode .plan-summary-row span[style*="color:#0C447C"]{ color:#FFFFFF !important; }
+  body.dark-mode #planSummaryWrap div[style*="background:#FDF8F0"]{ background:#1B2A42 !important; border-color:#27374D !important; }
+  body.dark-mode #planSummaryWrap div[style*="color:#0C447C"]{ color:#FFFFFF !important; }
+  body.dark-mode #planSummaryWrap span[style*="color:#374151"]{ color:#E8EDF5 !important; }
+  body.dark-mode #planSummaryWrap span[style*="color:#0C447C"]{ color:#FFFFFF !important; }
+  body.dark-mode #planSummaryWrap div[style*="border-bottom:1px solid #EFE6D2"]{ border-bottom-color:#27374D !important; }
+  body.dark-mode #planSummaryShowAllBtn{ color:#FFFFFF !important; border-color:#27374D !important; }
+  /* Lapsed Policies rows — same treatment as the dues/birthday list rows */
+  body.dark-mode #lapsedClientsList div[style*="background:#FDF1F0"]{
+    background:#2A1B1E !important;
+  }
+  body.dark-mode #lapsedClientsList div[style*="color:#0C447C"]{ color:#FFFFFF !important; }
+  body.dark-mode #lapsedClientsList div[style*="color:#6B7280"]{ color:#8DA0BC !important; }
+  body.dark-mode #lapsedClientsSub{ color:#8DA0BC !important; }
   /* The "Your name" box inside Branding uses .bg-bgcream, which goes
      dark navy in night mode (see rule above) — its label and SAVE NAME
      button text must switch to white here too, or they're unreadable
@@ -1654,6 +1708,7 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
       <div class="card" id="clientsIntroCard">
         <h2>📋 Manage Your Clients</h2>
         <p class="sub">Choose which clients will receive dues reminders and birthday greetings. Toggle off any clients you don't want to reach out to automatically.</p>
+        <p style="font-size:10px; color:#C99A3B; margin:8px 0 0; font-weight:600;">Build: 2026-07-05-reorder-v2 \u2014 if this line isn\u2019t visible, you\u2019re viewing a cached/old copy of this page.</p>
       </div>
 
       <!-- DUES CLIENTS -->
@@ -6811,14 +6866,14 @@ async function refreshDuesClientList(useCache = false){
   // Sort soonest/most-overdue due date first before storing, so every
   // render (full list, searched, or scrolled) follows this order.
   allDuesClients = sortDuesByDueDate(activeClients);
-  // Earliest lapse date first — policies with no lapse date at all
-  // (export had no Lapse Date column, or it was blank/unparseable for
-  // this row) sort to the end rather than breaking the comparison or
-  // clustering unpredictably with real dates.
+  // Most recently lapsed first (e.g. 2026 before 2016) — policies with
+  // no lapse date at all (export had no Lapse Date column, or it was
+  // blank/unparseable for this row) still sort to the end rather than
+  // breaking the comparison or clustering unpredictably with real dates.
   allLapsedClients = lapsedClients.sort((a, b) => {
-    const da = a.lapseDate || '9999-99-99';
-    const db = b.lapseDate || '9999-99-99';
-    return da < db ? -1 : da > db ? 1 : 0;
+    const da = a.lapseDate || '0000-00-00';
+    const db = b.lapseDate || '0000-00-00';
+    return da > db ? -1 : da < db ? 1 : 0;
   });
   // Fresh pull from the sheet — clear any unsaved local toggles so we don't
   // show stale state that no longer matches what's on the server.
