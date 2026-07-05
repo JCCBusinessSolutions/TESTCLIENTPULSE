@@ -3738,12 +3738,15 @@ function renderPickerList(clients){
   container.innerHTML = clients.map(c => {
     const checked = bcSelectedEmails.has(c.email);
     const value = formatPickerRowValue(c, bcSortField);
+    const lapsedBadge = isLapsedStatus(c.policyStatus)
+      ? '<span style="display:inline-block;background:var(--bad,#EB5757);color:#fff;font-size:9px;font-weight:700;padding:1px 6px;border-radius:100px;letter-spacing:.3px;margin-right:6px;vertical-align:middle;">LAPSED</span>'
+      : '';
     return `
       <div class="bc-picker-row${checked ? ' checked' : ''}" data-email="${escapeHtml(c.email)}">
         <div class="bc-picker-checkbox">${checked ? '\u2713' : ''}</div>
         <div class="bc-picker-info">
           <div class="bc-picker-name">${escapeHtml(c.clientName || c.email)}</div>
-          <div class="bc-picker-meta">${escapeHtml(c.email)}${bcSortField !== 'product' && c.product ? ' \u00b7 ' + escapeHtml(c.product) : ''}</div>
+          <div class="bc-picker-meta">${lapsedBadge}${escapeHtml(c.email)}${bcSortField !== 'product' && c.product ? ' \u00b7 ' + escapeHtml(c.product) : ''}</div>
         </div>
         <div class="bc-picker-amount">${value}</div>
       </div>
@@ -3779,12 +3782,18 @@ function currentFilteredClients(){
     list = list.filter(c => (c.product || '') === plan);
   }
   if (lapsedFilter){
-    // Reuses the same elapsed-time calculation as the Lapsed Policies
-    // list itself, so "less than 1 year" here means exactly the same
-    // thing it does there. A client with no usable lapse date (never
-    // lapsed, or the export had no Lapse Date column) never matches
-    // any of these options, since there's nothing to measure.
+    // Requires BOTH conditions to match, not lapseDate alone: the
+    // client's actual current Policy Status must say Lapsed (via
+    // isLapsedStatus, the same check used everywhere else in the app),
+    // AND their lapseDate must fall in the selected range. Checking
+    // lapseDate alone would incorrectly include a client whose export
+    // still carries an old Lapse Date value but whose current status is
+    // something else entirely (e.g. reinstated back to Premium Paying)
+    // — the status is the actual source of truth for "is this client
+    // lapsed", and the date only measures how long ago for those who
+    // genuinely are.
     list = list.filter(c => {
+      if (!isLapsedStatus(c.policyStatus)) return false;
       const years = yearsSinceLapse(c.lapseDate);
       if (years === null) return false;
       if (lapsedFilter === 'lt1') return years < 1;
