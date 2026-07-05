@@ -3517,8 +3517,23 @@ el('bcAttachmentFileInput').addEventListener('change', async (e) => {
       break;
     }
     try{
-      const base64 = await fileToBase64(file);
-      bcAttachments.push({ base64: base64, mimeType: file.type, filename: file.name });
+      // Image attachments (a phone photo, a screenshot, etc.) were
+      // previously stored completely uncompressed — unlike the
+      // header/footer template and inline body images, which already
+      // go through resizeImageForUpload(). An uncompressed photo can
+      // easily be several MB raw before any MIME/base64 encoding
+      // overhead is even factored in, which is exactly the kind of gap
+      // that could push a broadcast's real transmitted size well past
+      // what looks safe. PDFs are left untouched — they can't be
+      // meaningfully compressed client-side without a dedicated
+      // library, and are typically a reasonable size to begin with.
+      if (file.type && file.type.startsWith('image/')){
+        const resized = await resizeImageForUpload(file, 1600, 0.85, 1.5 * 1024 * 1024);
+        bcAttachments.push({ base64: resized.base64, mimeType: resized.mimeType, filename: file.name });
+      } else {
+        const base64 = await fileToBase64(file);
+        bcAttachments.push({ base64: base64, mimeType: file.type, filename: file.name });
+      }
     }catch(err){
       showStatus('broadcastStatus','error','Could not attach ' + file.name + ': ' + err.message);
     }
@@ -4339,7 +4354,16 @@ async function calculateBroadcastSizeMB(){
       templateBytes += Math.ceil(footerImg.split(',')[1].length * 0.75);
     }
   }
-  return { mb: (bodyBytes + attachmentBytes + templateBytes) / (1024 * 1024), uncertain: uncertain };
+  // Every one of these pieces gets MIME/base64-encoded before Gmail
+  // actually transmits it, inflating the real wire size by roughly 33%
+  // over these raw byte counts — matching the same factor applied in
+  // Code.gs's sendBroadcastEmailBatch size check, so the number shown
+  // here never understates what will actually be sent. Without this,
+  // a message could show as comfortably under the limit right up until
+  // send time, then fail anyway because the real encoded size was
+  // meaningfully higher than this raw count alone suggested.
+  const MIME_ENCODING_OVERHEAD = 1.37;
+  return { mb: ((bodyBytes + attachmentBytes + templateBytes) / (1024 * 1024)) * MIME_ENCODING_OVERHEAD, uncertain: uncertain };
 }
 
 // Gmail's real usable ceiling, once MIME/base64 overhead is factored

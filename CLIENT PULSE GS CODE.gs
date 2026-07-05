@@ -1056,7 +1056,19 @@ function sendBroadcastEmailBatch(rows, subject, htmlBody, attachments, useTempla
   // plus the template photos, all as they'll actually be transmitted.
   const htmlBodyBytes = Utilities.newBlob(String(htmlBody || '')).getBytes().length;
   const attachmentBytesTotal = (attachments || []).reduce((sum, a) => sum + Math.ceil((a.base64 || '').length * 0.75), 0);
-  const totalMB = (htmlBodyBytes / (1024 * 1024)) + templateMB + (attachmentBytesTotal / (1024 * 1024));
+  // Every one of these three pieces — the template photos, any inline
+  // body images, and real attachments — gets MIME/base64-encoded before
+  // Gmail actually transmits it, which inflates the real wire size by
+  // roughly 33% over the raw bytes measured above. Comparing raw bytes
+  // against a raw-byte threshold is exactly why a broadcast that
+  // measured ~0.64MB here could still fail with "Email is too large"
+  // for every recipient — the real transmitted size was meaningfully
+  // higher than what was being checked. Multiplying by this factor
+  // before comparing against the 6MB threshold is what actually closes
+  // that gap, rather than just lowering the raw-byte threshold further
+  // and hoping it happens to cover the same margin.
+  const MIME_ENCODING_OVERHEAD = 1.37;
+  const totalMB = ((htmlBodyBytes / (1024 * 1024)) + templateMB + (attachmentBytesTotal / (1024 * 1024))) * MIME_ENCODING_OVERHEAD;
   // 6MB is a deliberately conservative safety margin — Google's own
   // documentation notes the email body/header size and the attachments
   // size are quota-limited *separately*, and the exact numbers aren't
@@ -1066,13 +1078,13 @@ function sendBroadcastEmailBatch(rows, subject, htmlBody, attachments, useTempla
   // tighter than what the raw math alone would suggest is safe.
   if (totalMB > 6){
     throw new Error(
-      'This message is too large (~' + totalMB.toFixed(1) + 'MB total, including any inserted photos, the header/footer template, and attachments) to send reliably. ' +
+      'This message is too large (~' + totalMB.toFixed(1) + 'MB total once encoded for sending, including any inserted photos, the header/footer template, and attachments) to send reliably. ' +
       'Remove an inline image or attachment, or turn off "Use header & footer template", then try again.'
     );
   }
-  if (useTemplate && templateMB > 2){
+  if (useTemplate && (templateMB * MIME_ENCODING_OVERHEAD) > 2){
     throw new Error(
-      'Your saved header/footer photos are too large (~' + templateMB.toFixed(1) + 'MB combined) to embed in every email of this broadcast. ' +
+      'Your saved header/footer photos are too large (~' + (templateMB * MIME_ENCODING_OVERHEAD).toFixed(1) + 'MB combined once encoded for sending) to embed in every email of this broadcast. ' +
       'Go to Settings \u2192 Branding Studio and re-upload your header and footer photos \u2014 they\u2019ll now be compressed automatically to a safe size. ' +
       'Or turn off "Use header & footer template" for this broadcast and send without it.'
     );
