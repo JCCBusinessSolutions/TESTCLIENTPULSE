@@ -3738,15 +3738,22 @@ function renderPickerList(clients){
   container.innerHTML = clients.map(c => {
     const checked = bcSelectedEmails.has(c.email);
     const value = formatPickerRowValue(c, bcSortField);
-    const lapsedBadge = isLapsedStatus(c.policyStatus)
+    const isLapsed = isLapsedStatus(c.policyStatus);
+    const lapsedBadge = isLapsed
       ? '<span style="display:inline-block;background:var(--bad,#EB5757);color:#fff;font-size:9px;font-weight:700;padding:1px 6px;border-radius:100px;letter-spacing:.3px;margin-right:6px;vertical-align:middle;">LAPSED</span>'
+      : '';
+    // Shown right next to the badge so the advisor can see exactly when
+    // this person lapsed without leaving the picker to cross-check the
+    // Lapsed Policies page separately.
+    const lapsedDateNote = (isLapsed && c.lapseDate)
+      ? '<span style="color:#9CA3AF; font-size:10.5px; margin-right:6px;">Lapsed ' + formatDateDisplay(c.lapseDate) + '</span>'
       : '';
     return `
       <div class="bc-picker-row${checked ? ' checked' : ''}" data-email="${escapeHtml(c.email)}">
         <div class="bc-picker-checkbox">${checked ? '\u2713' : ''}</div>
         <div class="bc-picker-info">
           <div class="bc-picker-name">${escapeHtml(c.clientName || c.email)}</div>
-          <div class="bc-picker-meta">${lapsedBadge}${escapeHtml(c.email)}${bcSortField !== 'product' && c.product ? ' \u00b7 ' + escapeHtml(c.product) : ''}</div>
+          <div class="bc-picker-meta">${lapsedBadge}${lapsedDateNote}${escapeHtml(c.email)}${bcSortField !== 'product' && c.product ? ' \u00b7 ' + escapeHtml(c.product) : ''}</div>
         </div>
         <div class="bc-picker-amount">${value}</div>
       </div>
