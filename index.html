@@ -3571,6 +3571,26 @@ function fileToBase64(file){
    is currently visible after search + plan filter + sort.
    ============================================================ */
 let bcAllClients = [];      // full client list, loaded once per picker open
+
+// A client with multiple policies (same email, different products/
+// policy numbers) would otherwise appear once per policy in any raw
+// client list — correct for the Dues Tracker itself, but wrong for a
+// broadcast recipient list, where a person should only ever appear
+// once no matter how many policies they hold. Used everywhere
+// bcAllClients gets populated, so this guarantee holds regardless of
+// which code path (fresh fetch, loaded schedule, loaded draft) built it.
+function deduplicateClientsByEmail(clients){
+  const seenEmails = new Set();
+  const result = [];
+  (clients || []).forEach(c => {
+    if (!c.email) return;
+    const emailKey = c.email.toLowerCase();
+    if (seenEmails.has(emailKey)) return;
+    seenEmails.add(emailKey);
+    result.push(c);
+  });
+  return result;
+}
 let bcSelectedEmails = new Set(); // currently selected recipient emails
 let bcSortField = 'fundValue';    // 'fundValue' | 'product' | 'clientName' | 'dueDate'
 
@@ -3586,7 +3606,7 @@ el('bcChooseRecipientsBtn').addEventListener('click', async () => {
   el('bcChooseRecipientsBtn').textContent = 'LOADING\u2026';
   try{
     const clients = await fetchDuesClientList();
-    bcAllClients = clients.filter(c => c.email);
+    bcAllClients = deduplicateClientsByEmail(clients);
     if (bcAllClients.length === 0){
       showStatus('broadcastStatus','error','No clients with an email address found in your Dues Tracker.');
       return;
@@ -4071,7 +4091,7 @@ async function loadScheduleIntoEditor(schedule){
   bcUseTemplate = !!payload.useTemplate;
   el('bcTemplateToggle').querySelector('.theme-switch-track').classList.toggle('is-on', bcUseTemplate);
   bcSelectedEmails = new Set((payload.rows || []).map(r => r.email));
-  bcAllClients = (payload.rows || []).map(r => ({ email: r.email, clientName: r.clientName }));
+  bcAllClients = deduplicateClientsByEmail((payload.rows || []).map(r => ({ email: r.email, clientName: r.clientName })));
   el('bcRecipientSummaryText').textContent = bcSelectedEmails.size + ' recipient' + (bcSelectedEmails.size === 1 ? '' : 's') + ' selected (from the original schedule)';
 
   el('bcSendLaterBtn').click();
@@ -4198,7 +4218,7 @@ function loadDraftIntoEditor(draft){
   bcUseTemplate = !!payload.useTemplate;
   el('bcTemplateToggle').querySelector('.theme-switch-track').classList.toggle('is-on', bcUseTemplate);
   bcSelectedEmails = new Set((payload.rows || []).map(r => r.email));
-  bcAllClients = (payload.rows || []).map(r => ({ email: r.email, clientName: r.clientName }));
+  bcAllClients = deduplicateClientsByEmail((payload.rows || []).map(r => ({ email: r.email, clientName: r.clientName })));
   const n = bcSelectedEmails.size;
   el('bcRecipientSummaryText').textContent = n === 0
     ? 'No recipients selected yet'
