@@ -1665,9 +1665,10 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
         </div>
         <div id="clientsSummaryBody">
           <p class="sub" style="margin-bottom:4px;">Fund Value Distribution</p>
-          <canvas id="fundValueChart" style="width:100%; max-width:100%; height:200px;"></canvas>
+          <p style="font-size:11px; color:#9CA3AF; margin:0 0 8px;">Tap a bar to see which clients are in that range.</p>
+          <div id="fundValueChart"></div>
           <p class="sub" style="margin:20px 0 4px;">Plan Summary</p>
-          <canvas id="planSummaryChart" style="width:100%; max-width:100%; height:220px;"></canvas>
+          <div id="planSummaryList"></div>
         </div>
       </div>
 
@@ -2786,6 +2787,7 @@ function parseDuesFromWorkbook(workbook){
   const idxEmail        = findColumn(headers, claimed, ['email address','email'], ['email','e-mail','mail']);
   const idxPolicyNumber = findColumn(headers, claimed, ['policy number','policy no'], ['policy number','policy no','policy']);
   const idxDueDate       = findColumn(headers, claimed, ['premium due date','due date'], ['due date','renewal date','anniversary date','due']);
+  const idxLapseDate     = findColumn(headers, claimed, ['lapse date','date lapsed'], ['lapse date','lapsed date','date lapsed']);
   const idxStatus        = findColumn(headers, claimed, ['policy status','status'], ['status']);
   const idxMode          = findColumn(headers, claimed, ['premium mode','payment mode'], ['mode','frequency']);
   const idxProduct       = findColumn(headers, claimed, ['policy name','product name','plan name'], ['product','plan','description']);
@@ -2834,6 +2836,13 @@ function parseDuesFromWorkbook(workbook){
     const dueDateRaw = r[idxDueDate];
     const dueDate = dueDateRaw instanceof Date ? dueDateRaw : new Date(String(dueDateRaw));
 
+    let lapseDate = null;
+    if (idxLapseDate !== -1){
+      const lapseDateRaw = r[idxLapseDate];
+      const parsedLapseDate = lapseDateRaw instanceof Date ? lapseDateRaw : new Date(String(lapseDateRaw));
+      if (!isNaN(parsedLapseDate.getTime())) lapseDate = parsedLapseDate.toISOString();
+    }
+
     // Prefer a "total premium" style column when present and nonzero (the
     // actual amount currently due); fall back to a plain premium amount
     // column when that's all the export provides.
@@ -2858,6 +2867,10 @@ function parseDuesFromWorkbook(workbook){
       // up (that function only considers rows where the Due Date cell
       // is an actual Date, so null here means automatic exclusion).
       dueDate: isPaidUp ? null : (isNaN(dueDate.getTime()) ? null : dueDate.toISOString()),
+      // Only meaningful for Lapsed rows — a distinct column from Due
+      // Date, since the export tracks exactly when a policy actually
+      // lapsed separately from its regular premium due date.
+      lapseDate: lapseDate,
       policyStatus: policyStatus,
       isPaidUp: isPaidUp,
       isLapsed: isLapsed
@@ -6384,7 +6397,7 @@ function renderLapsedClientsList(clients, append = false){
       <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:#FDF1F0;border-radius:8px;border-left:3px solid var(--bad,#EB5757);">
         <div style="flex:1;min-width:0;">
           <div style="font-weight:600;color:#0C447C;font-size:13px;">${escapeHtml(client.clientName)}</div>
-          <div style="font-size:11px;color:#6B7280;">${escapeHtml(client.product)} • ${escapeHtml(client.policyStatus || 'Lapsed')}</div>
+          <div style="font-size:11px;color:#6B7280;">${escapeHtml(client.product)} • Lapsed: ${formatDateDisplay(client.lapseDate)}</div>
         </div>
         <div style="font-size:13px;font-weight:600;color:#0C447C;">PHP ${Number(client.premiumAmount || 0).toLocaleString('en-PH', {minimumFractionDigits: 2})}</div>
       </div>
@@ -6427,95 +6440,32 @@ function setupLapsedInfiniteScroll(clients){
 }
 
 /* ============================================================
-   CLIENT SUMMARY CHARTS — plain <canvas> bar charts, no external
-   chart library, so this stays a single self-contained file.
-   Both charts are redrawn from allDuesClients any time the dues
-   list refreshes (see refreshDuesClientList), and again on
-   window resize so they stay crisp at the canvas's real
-   displayed width rather than stretching a fixed-resolution image.
+   CLIENT SUMMARY — Fund Value Distribution (clickable HTML bars
+   with an expandable client breakdown) and Plan Summary (ranked
+   list). Both redraw from allDuesClients any time the dues list
+   refreshes (see refreshDuesClientList).
    ============================================================ */
 
-// Shared low-level bar chart renderer — draws vertical bars sized to
-// the canvas's actual CSS width (via devicePixelRatio-aware sizing),
-// with a value label above each bar and a name label below it.
-function drawBarChart(canvas, labels, values, barColor){
-  if (!canvas) return;
-  const dpr = window.devicePixelRatio || 1;
-  const cssWidth = canvas.clientWidth || canvas.parentElement.clientWidth || 300;
-  const cssHeight = parseInt(canvas.style.height, 10) || 200;
-  canvas.width = cssWidth * dpr;
-  canvas.height = cssHeight * dpr;
-  const ctx = canvas.getContext('2d');
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, cssWidth, cssHeight);
 
-  if (!labels.length){
-    ctx.fillStyle = '#9CA3AF';
-    ctx.font = '12px Inter, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('No data yet', cssWidth / 2, cssHeight / 2);
-    return;
-  }
-
-  const maxValue = Math.max(...values, 1);
-  const paddingTop = 22;    // room for the value label above each bar
-  const paddingBottom = 36; // room for the (possibly wrapped) name label below
-  const chartHeight = cssHeight - paddingTop - paddingBottom;
-  const gap = 10;
-  const barWidth = Math.max((cssWidth - gap * (labels.length + 1)) / labels.length, 18);
-
-  labels.forEach((label, i) => {
-    const value = values[i];
-    const barHeight = maxValue > 0 ? (value / maxValue) * chartHeight : 0;
-    const x = gap + i * (barWidth + gap);
-    const y = paddingTop + (chartHeight - barHeight);
-
-    // Bar
-    ctx.fillStyle = barColor;
-    const radius = 4;
-    ctx.beginPath();
-    ctx.moveTo(x, y + barHeight);
-    ctx.lineTo(x, y + radius);
-    ctx.quadraticCurveTo(x, y, x + radius, y);
-    ctx.lineTo(x + barWidth - radius, y);
-    ctx.quadraticCurveTo(x + barWidth, y, x + barWidth, y + radius);
-    ctx.lineTo(x + barWidth, y + barHeight);
-    ctx.closePath();
-    ctx.fill();
-
-    // Value label above the bar
-    ctx.fillStyle = '#0C447C';
-    ctx.font = '700 11px Inter, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(String(value), x + barWidth / 2, y - 6);
-
-    // Name label below the bar — wrapped onto up to 2 lines if the bar is narrow
-    ctx.fillStyle = '#6B7280';
-    ctx.font = '10px Inter, sans-serif';
-    const words = String(label).split(' ');
-    const maxLineWidth = barWidth + gap - 4;
-    let line1 = '', line2 = '';
-    words.forEach(w => {
-      const testLine = line1 ? line1 + ' ' + w : w;
-      if (ctx.measureText(testLine).width <= maxLineWidth || !line1){
-        line1 = testLine;
-      } else {
-        line2 = line2 ? line2 + ' ' + w : w;
-      }
-    });
-    ctx.fillText(line1, x + barWidth / 2, cssHeight - paddingBottom + 14);
-    if (line2) ctx.fillText(line2, x + barWidth / 2, cssHeight - paddingBottom + 26);
-  });
-}
 
 // Fund Value Distribution — buckets every dues client (Premium Paying +
 // Paid-Up; Lapsed policies are excluded here since they're tracked
 // separately and their fund value isn't the focus of this summary)
 // into fixed brackets, matching the requested breakdown: under 100K,
 // then 100K-wide bands up to 500K+.
-function drawFundValueChart(){
-  const canvas = document.getElementById('fundValueChart');
-  if (!canvas) return;
+//
+// Rendered as HTML/CSS bars (not canvas) specifically so each bar can
+// be tapped to reveal the actual client names inside that bracket —
+// canvas has no natural per-element click target, while a div-per-bar
+// layout gets this for free. The breakdown panel is collapsed by
+// default and only expands for whichever bracket was last tapped, so
+// the chart stays compact until the person actually wants the detail.
+let fundValueExpandedBucket = null; // remembers which bucket (by label) is open across redraws
+
+function renderFundValueChart(){
+  const container = document.getElementById('fundValueChart');
+  if (!container) return;
+
   const buckets = [
     { label: '<100K',    min: 0,       max: 100000 },
     { label: '100-199K', min: 100000,  max: 200000 },
@@ -6524,36 +6474,115 @@ function drawFundValueChart(){
     { label: '400-499K', min: 400000,  max: 500000 },
     { label: '500K+',    min: 500000,  max: Infinity }
   ];
-  const counts = buckets.map(b => allDuesClients.filter(c => {
-    const fv = Number(c.fundValue) || 0;
-    return fv >= b.min && fv < b.max;
-  }).length);
-  drawBarChart(canvas, buckets.map(b => b.label), counts, '#0C447C');
+  const bucketed = buckets.map(b => ({
+    ...b,
+    clients: allDuesClients.filter(c => {
+      const fv = Number(c.fundValue) || 0;
+      return fv >= b.min && fv < b.max;
+    })
+  }));
+
+  const maxCount = Math.max(...bucketed.map(b => b.clients.length), 1);
+  const barAreaHeight = 130;
+
+  const barsHtml = bucketed.map(b => {
+    const count = b.clients.length;
+    const barHeight = count > 0 ? Math.max((count / maxCount) * barAreaHeight, 4) : 2;
+    const isExpanded = fundValueExpandedBucket === b.label;
+    return `
+      <div class="fv-bar-col" data-bucket="${escapeHtml(b.label)}" style="flex:1; display:flex; flex-direction:column; align-items:center; cursor:pointer;">
+        <div style="font-size:11px; font-weight:700; color:#0C447C; margin-bottom:4px;">${count}</div>
+        <div style="width:100%; max-width:44px; height:${barAreaHeight}px; display:flex; align-items:flex-end;">
+          <div style="width:100%; height:${barHeight}px; background:${isExpanded ? '#0C447C' : '#5B87AD'}; border-radius:4px 4px 0 0; transition:background .15s;"></div>
+        </div>
+        <div style="font-size:10px; color:#6B7280; margin-top:6px; text-align:center;">${b.label}</div>
+      </div>
+    `;
+  }).join('');
+
+  const expandedBucket = bucketed.find(b => b.label === fundValueExpandedBucket);
+  const breakdownHtml = expandedBucket ? `
+    <div id="fvBreakdownPanel" style="margin-top:14px; padding:10px 12px; background:#FDF8F0; border:1px solid #E4DCC8; border-radius:8px;">
+      <div style="font-size:12px; font-weight:700; color:#0C447C; margin-bottom:8px;">${escapeHtml(expandedBucket.label)} \u2014 ${expandedBucket.clients.length} client${expandedBucket.clients.length === 1 ? '' : 's'}</div>
+      ${expandedBucket.clients.length === 0
+        ? '<div style="font-size:12px; color:#9CA3AF;">No clients in this range.</div>'
+        : '<div style="max-height:220px; overflow-y:auto;">' + expandedBucket.clients
+            .slice().sort((a, b) => (Number(b.fundValue)||0) - (Number(a.fundValue)||0))
+            .map(c => `
+              <div style="display:flex; justify-content:space-between; padding:5px 0; border-bottom:1px solid #EFE6D2; font-size:12px;">
+                <span style="color:#374151; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding-right:8px;">${escapeHtml(c.clientName || '(no name)')}</span>
+                <span style="font-weight:600; color:#0C447C; flex-shrink:0;">PHP ${Number(c.fundValue||0).toLocaleString('en-PH', {minimumFractionDigits:2})}</span>
+              </div>
+            `).join('') + '</div>'
+      }
+    </div>
+  ` : '';
+
+  container.innerHTML = `<div style="display:flex; gap:6px; align-items:flex-end;">${barsHtml}</div>${breakdownHtml}`;
+
+  container.querySelectorAll('.fv-bar-col').forEach(col => {
+    col.addEventListener('click', () => {
+      const bucket = col.dataset.bucket;
+      // Tapping the already-open bucket closes it; tapping a different
+      // one switches to it. Nothing is expanded by default.
+      fundValueExpandedBucket = (fundValueExpandedBucket === bucket) ? null : bucket;
+      renderFundValueChart();
+    });
+  });
 }
 
 // Plan Summary — counts how many dues clients (Premium Paying +
 // Paid-Up) fall under each distinct product/plan name, sorted by
 // count descending so the most common plan shows first.
-function drawPlanSummaryChart(){
-  const canvas = document.getElementById('planSummaryChart');
-  if (!canvas) return;
+// Plan Summary rendered as a ranked list rather than a bar chart —
+// once there are a dozen or more distinct plan names with wildly
+// uneven counts (e.g. one plan at 495, several others down at 2-3),
+// a bar chart produces bars too thin to read and labels that overlap
+// no matter how they're wrapped. A list scales to any number of
+// categories, stays legible on a phone screen, and the small
+// proportional bar behind each row still gives an at-a-glance sense of
+// scale without needing the space a full chart would require.
+function renderPlanSummaryList(){
+  const container = document.getElementById('planSummaryList');
+  if (!container) return;
+
   const countByPlan = {};
   allDuesClients.forEach(c => {
     const plan = (c.product || '').trim() || 'Unspecified';
     countByPlan[plan] = (countByPlan[plan] || 0) + 1;
   });
   const entries = Object.entries(countByPlan).sort((a, b) => b[1] - a[1]);
-  drawBarChart(canvas, entries.map(e => e[0]), entries.map(e => e[1]), '#C99A3B');
+
+  if (entries.length === 0){
+    container.innerHTML = '<p style="color:#9CA3AF;font-size:13px;">No data yet</p>';
+    return;
+  }
+
+  const maxCount = entries[0][1];
+  container.innerHTML = entries.map(([plan, count]) => {
+    const pct = maxCount > 0 ? Math.max((count / maxCount) * 100, 3) : 0; // min 3% so even small counts show a sliver
+    return `
+      <div style="position:relative; margin-bottom:8px; border-radius:8px; overflow:hidden; background:#FDF8F0;">
+        <div style="position:absolute; top:0; left:0; bottom:0; width:${pct}%; background:rgba(201,154,59,0.22);"></div>
+        <div style="position:relative; display:flex; justify-content:space-between; align-items:center; padding:8px 12px; font-size:13px;">
+          <span style="color:#374151; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding-right:10px;">${escapeHtml(plan)}</span>
+          <span style="font-weight:700; color:#0C447C; flex-shrink:0;">${count}</span>
+        </div>
+      </div>
+    `;
+  }).join('');
 }
 
 function redrawClientSummaryCharts(){
-  drawFundValueChart();
-  drawPlanSummaryChart();
+  renderFundValueChart();
+  renderPlanSummaryList();
 }
 
 window.addEventListener('resize', () => {
-  // Redraw on resize so bars stay crisp at the canvas's current real
-  // width instead of stretching whatever resolution was drawn earlier.
+  // HTML/CSS bars reflow on their own with the browser's normal layout,
+  // so this isn't strictly required the way canvas redraws were, but
+  // it's kept so an in-progress breakdown panel re-renders cleanly if
+  // the person rotates their device mid-view.
   if (document.getElementById('fundValueChart')) redrawClientSummaryCharts();
 });
 
@@ -6674,7 +6703,15 @@ async function refreshDuesClientList(useCache = false){
   // Sort soonest/most-overdue due date first before storing, so every
   // render (full list, searched, or scrolled) follows this order.
   allDuesClients = sortDuesByDueDate(activeClients);
-  allLapsedClients = lapsedClients.sort((a, b) => String(a.clientName||'').localeCompare(String(b.clientName||'')));
+  // Earliest lapse date first — policies with no lapse date at all
+  // (export had no Lapse Date column, or it was blank/unparseable for
+  // this row) sort to the end rather than breaking the comparison or
+  // clustering unpredictably with real dates.
+  allLapsedClients = lapsedClients.sort((a, b) => {
+    const da = a.lapseDate || '9999-99-99';
+    const db = b.lapseDate || '9999-99-99';
+    return da < db ? -1 : da > db ? 1 : 0;
+  });
   // Fresh pull from the sheet — clear any unsaved local toggles so we don't
   // show stale state that no longer matches what's on the server.
   Object.keys(duesPendingChanges).forEach(k => delete duesPendingChanges[k]);

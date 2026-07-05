@@ -6,7 +6,7 @@
  */
 
 const SHEET_NAME = 'Dues Tracker';
-const HEADERS = ['Policy Number','Client Name','Email','Product','Premium Mode','Premium Amount','Fund Value','Due Date','Policy Status','Last Reminder Sent','Send Dues?'];
+const HEADERS = ['Policy Number','Client Name','Email','Product','Premium Mode','Premium Amount','Fund Value','Due Date','Policy Status','Last Reminder Sent','Send Dues?','Lapse Date'];
 
 const BIRTHDAY_SHEET_NAME = 'Birthday Tracker';
 const BIRTHDAY_HEADERS = ['Full Name','Email','Contact Number','Location','Date of Birth','Last Greeting Sent (Year)','Send Birthday?'];
@@ -211,11 +211,21 @@ function setupSheet(){
     }
     const refreshedHeaders = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
     if (!refreshedHeaders.includes('Send Dues?')){
-      const lastCol = HEADERS.length;
+      // Uses this sheet's own current column count (not HEADERS.length,
+      // which no longer reflects "Send Dues?" being the last column now
+      // that Lapse Date was added after it) — appending after whatever
+      // this specific sheet currently has is always correct regardless
+      // of how HEADERS itself has grown since.
+      const lastCol = sheet.getLastColumn() + 1;
       sheet.getRange(1, lastCol).setValue('Send Dues?');
       for (let i = 2; i <= sheet.getLastRow(); i++){
         sheet.getRange(i, lastCol).setValue(true);
       }
+    }
+    const headersAfterSendDues = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    if (!headersAfterSendDues.includes('Lapse Date')){
+      const lastCol = sheet.getLastColumn() + 1;
+      sheet.getRange(1, lastCol).setValue('Lapse Date');
     }
   }
   const policyColIndex = HEADERS.indexOf('Policy Number') + 1;
@@ -373,6 +383,8 @@ function getDuesClientList(){
       }
     }
     const dueDate = row[col('Due Date')];
+    const lapseDateCol = col('Lapse Date');
+    const lapseDateRaw = lapseDateCol !== -1 ? row[lapseDateCol] : null;
     result.push({
       policyNumber: policyNum,
       clientName: row[col('Client Name')],
@@ -382,6 +394,7 @@ function getDuesClientList(){
       premiumAmount: parsedAmount,
       fundValue: parsedFundValue,
       dueDate: dueDate instanceof Date ? Utilities.formatDate(dueDate, Session.getScriptTimeZone(), 'yyyy-MM-dd') : '',
+      lapseDate: lapseDateRaw instanceof Date ? Utilities.formatDate(lapseDateRaw, Session.getScriptTimeZone(), 'yyyy-MM-dd') : '',
       policyStatus: row[col('Policy Status')],
       sendDues: row[col('Send Dues?')] === true || row[col('Send Dues?')] === 'TRUE' || row[col('Send Dues?')] === 1 || row[col('Send Dues?')] === '1'
     });
@@ -560,6 +573,7 @@ function pushDuesRows(rows){
   const data = sheet.getDataRange().getValues();
   const policyCol = HEADERS.indexOf('Policy Number');
   const lastReminderCol = HEADERS.indexOf('Last Reminder Sent');
+  const sendDuesCol = HEADERS.indexOf('Send Dues?');
   const existingRowByPolicy = {};
   for (let i = 1; i < data.length; i++){
     existingRowByPolicy[String(data[i][policyCol])] = i;
@@ -568,17 +582,18 @@ function pushDuesRows(rows){
   const newRows = [];
   rows.forEach(r => {
     const dueDateValue = r.dueDate ? new Date(r.dueDate) : '';
+    const lapseDateValue = r.lapseDate ? new Date(r.lapseDate) : '';
     // Row order must exactly match HEADERS: Policy Number, Client Name,
     // Email, Product, Premium Mode, Premium Amount, Fund Value, Due Date,
-    // Policy Status, Last Reminder Sent, Send Dues?
-    const rowValues = [r.policyNumber, r.clientName, r.email, r.product, r.premiumMode, r.premiumAmount, (r.fundValue || 0), dueDateValue, r.policyStatus, '', true];
+    // Policy Status, Last Reminder Sent, Send Dues?, Lapse Date
+    const rowValues = [r.policyNumber, r.clientName, r.email, r.product, r.premiumMode, r.premiumAmount, (r.fundValue || 0), dueDateValue, r.policyStatus, '', true, lapseDateValue];
     const idx = existingRowByPolicy[String(r.policyNumber)];
     if (idx !== undefined){
       const lastReminderSent = data[idx][lastReminderCol];
-      const sendDues = data[idx][HEADERS.indexOf('Send Dues?')];
+      const sendDues = data[idx][sendDuesCol];
       data[idx] = rowValues;
       data[idx][lastReminderCol] = lastReminderSent;
-      data[idx][HEADERS.indexOf('Send Dues?')] = sendDues;
+      data[idx][sendDuesCol] = sendDues;
       updated++;
     } else {
       newRows.push(rowValues);
