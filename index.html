@@ -3660,16 +3660,21 @@ async function refreshScheduledBroadcastsList(){
   try{
     const data = await callBackend({ action: 'getScheduledBroadcasts' });
     const schedules = (data && data.schedules) || [];
-    const active = schedules.filter(s => s.status === 'scheduled');
+    const active = schedules.filter(s => s.status === 'scheduled' || s.status === 'sending');
     if (active.length === 0){
       container.innerHTML = '<div style="font-size:13px; color:#9CA3AF;">No scheduled broadcasts.</div>';
       return;
     }
     container.innerHTML = active.map(s => {
       const when = new Date(s.scheduledFor).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+      const isSending = s.status === 'sending';
+      const progressLine = isSending
+        ? '<br><span style="color:var(--gold,#C99A3B); font-weight:700;">Sending\u2026 ' + (s.sentCount + s.failedCount) + ' processed so far</span>'
+        : '';
+      const editButton = isSending ? '' : '<button type="button" class="bc-scheduled-edit" data-id="' + escapeHtml(s.scheduleId) + '">EDIT</button>';
       return '<div class="bc-scheduled-row">'
-        + '<span style="flex:1 1 auto; min-width:0;"><strong>' + escapeHtml(s.subject || '(no subject)') + '</strong><br>' + when + '</span>'
-        + '<button type="button" class="bc-scheduled-edit" data-id="' + escapeHtml(s.scheduleId) + '">EDIT</button>'
+        + '<span style="flex:1 1 auto; min-width:0;"><strong>' + escapeHtml(s.subject || '(no subject)') + '</strong><br>' + when + progressLine + '</span>'
+        + editButton
         + '<button type="button" class="bc-scheduled-cancel" data-id="' + escapeHtml(s.scheduleId) + '">CANCEL</button>'
         + '</div>';
     }).join('');
@@ -4170,12 +4175,26 @@ async function runScheduleBroadcast(recipients, subject, body, useTemplate, sche
     const formatted = scheduledDate.toLocaleString('en-PH', { weekday: 'long', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
 
     if (bcEditingScheduleId){
-      const result = await callBackend({
-        action: 'editScheduledBroadcast',
-        scheduleId: bcEditingScheduleId,
-        scheduledFor: scheduledDate.toISOString(),
-        payload: payload
-      });
+      const scheduleIdBeingEdited = bcEditingScheduleId; // capture before any reset, for diagnostics if this fails
+      let result;
+      try{
+        result = await callBackend({
+          action: 'editScheduledBroadcast',
+          scheduleId: bcEditingScheduleId,
+          scheduledFor: scheduledDate.toISOString(),
+          payload: payload
+        });
+      }catch(networkErr){
+        // Diagnostic: surface exactly what was being attempted when the
+        // network-level failure happened, since "Load failed" alone
+        // gives no way to tell which of scheduleId/recipients/body was
+        // the actual problem.
+        networkErr.message = networkErr.message +
+          ' [editing scheduleId=' + scheduleIdBeingEdited +
+          ', recipients=' + rows.length +
+          ', bodyLength=' + body.length + ' chars]';
+        throw networkErr;
+      }
       if (!result.success){
         throw new Error(result.error || 'Unknown error from server');
       }
