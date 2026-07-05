@@ -1031,6 +1031,32 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
   .bc-completed-row.has-failures{
     border-left-color: var(--bad, #EB5757);
   }
+  .bc-swipe-wrap{
+    position: relative;
+    overflow: hidden;
+    border-radius: 10px;
+    margin-bottom: 8px;
+  }
+  .bc-swipe-wrap .bc-completed-row{
+    margin-bottom: 0;
+    position: relative;
+    transition: transform 0.2s ease;
+    touch-action: pan-y;
+  }
+  .bc-swipe-delete-action{
+    position: absolute;
+    top: 0; right: 0; bottom: 0;
+    width: 90px;
+    background: var(--bad, #EB5757);
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 0.5px;
+    border-radius: 0 10px 10px 0;
+  }
   .bc-picker-row{
     display: flex;
     align-items: center;
@@ -1400,7 +1426,7 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
         <div class="flex items-start gap-1.5 mt-3">
           <span class="text-[11px] flex-shrink-0">🔒</span>
           <ul class="footer-note !text-left m-0 pl-4" style="list-style:disc;">
-            <li>JCC Business Solutions · Dues Tracker Parser · Only "Premium paying" policies are imported. Skipped automatically: Lapsed, Paid-Up, Surrendered, Extended Term.</li>
+            <li>JCC Business Solutions · Dues Tracker Parser · Premium Paying and Paid-Up policies are imported together (Paid-Up policies won't receive due reminders, since they have no due date). Lapsed policies are imported separately for follow-up. Skipped automatically: Surrendered, Expired, Cancelled, Terminated, Matured.</li>
             <li class="mt-1">The developer has no access to uploaded files under any circumstance — everything is processed in your browser and pushed only into your own Google Sheet once set up.</li>
           </ul>
         </div>
@@ -1629,6 +1655,22 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
         <p class="sub">Choose which clients will receive dues reminders and birthday greetings. Toggle off any clients you don't want to reach out to automatically.</p>
       </div>
 
+      <!-- SUMMARY CHARTS — Fund Value distribution and per-plan counts,
+           drawn as plain <canvas> bar charts so this stays a single,
+           self-contained file with no extra chart library dependency. -->
+      <div class="card" id="clientsSummaryCard">
+        <div class="card-header-row" id="clientsSummaryHeader">
+          <h2 style="margin:0;">Client Summary</h2>
+          <button class="collapse-toggle" id="toggleClientsSummary" aria-label="Collapse">&#8943;</button>
+        </div>
+        <div id="clientsSummaryBody">
+          <p class="sub" style="margin-bottom:4px;">Fund Value Distribution</p>
+          <canvas id="fundValueChart" style="width:100%; max-width:100%; height:200px;"></canvas>
+          <p class="sub" style="margin:20px 0 4px;">Plan Summary</p>
+          <canvas id="planSummaryChart" style="width:100%; max-width:100%; height:220px;"></canvas>
+        </div>
+      </div>
+
       <!-- DUES CLIENTS -->
       <div class="card" id="duesClientsCard">
         <div class="card-header-row" id="duesClientsHeader">
@@ -1637,6 +1679,18 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
         </div>
         <div id="duesClientsBody">
           <div style="padding:12px 16px;border-bottom:1px solid #e7dfcf;">
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+              <select id="duesPlanFilter" style="flex:1 1 140px;min-width:0;padding:9px 10px;border:1px solid #ddd;border-radius:8px;font-size:12.5px;font-family:inherit;background:#fff;color:#374151;">
+                <option value="">All Plans</option>
+              </select>
+              <select id="duesSortSelect" style="flex:1 1 160px;min-width:0;padding:9px 10px;border:1px solid #ddd;border-radius:8px;font-size:12.5px;font-family:inherit;background:#fff;color:#374151;">
+                <option value="dueDate">Sort: Due Date (soonest)</option>
+                <option value="fundValueDesc">Sort: Fund Value (highest first)</option>
+                <option value="fundValueAsc">Sort: Fund Value (lowest first)</option>
+                <option value="nameAsc">Sort: Name (A–Z)</option>
+                <option value="nameDesc">Sort: Name (Z–A)</option>
+              </select>
+            </div>
             <div style="display:flex;gap:8px;align-items:center;">
               <input type="text" id="duesSearchInput" placeholder="Search by name, product, or policy #..." style="flex:1;min-width:0;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;font-family:inherit;">
               <button type="button" id="duesSearchClearBtn" style="width:auto;min-height:0;flex-shrink:0;background:none;border:1px solid #ddd;border-radius:8px;cursor:pointer;color:#999;font-size:16px;padding:8px 12px;">✕</button>
@@ -1654,6 +1708,19 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
             <button class="btn-gold" id="saveDuesPreferences" style="display:flex;align-items:center;justify-content:center;gap:7px;margin-left:8px;">✓ SAVE CHANGES</button>
           </div>
           <div class="status" id="duesClientsStatus"></div>
+        </div>
+      </div>
+
+      <!-- LAPSED POLICIES — display-only, no reminder toggle since
+           lapsed policies never get dues reminders in the first place -->
+      <div class="card" id="lapsedClientsCard">
+        <div class="card-header-row" id="lapsedClientsHeader">
+          <h2 style="margin:0;">Lapsed Policies</h2>
+          <button class="collapse-toggle" id="toggleLapsedClients" aria-label="Collapse">&#8943;</button>
+        </div>
+        <div id="lapsedClientsBody">
+          <p class="sub" id="lapsedClientsSub">Loading lapsed policies…</p>
+          <div id="lapsedClientsList" style="max-height:400px;overflow-y:auto;padding:12px 16px;border:1px solid #e7dfcf;border-radius:6px;"></div>
         </div>
       </div>
 
@@ -2736,12 +2803,14 @@ function parseDuesFromWorkbook(workbook){
 
   const out = [];
   let skippedStatus = 0;
-  // Statuses that mean a policy is no longer active, across the wording
-  // different insurers tend to use. Anything NOT matching one of these
-  // (e.g. "Premium paying", "Active", "In force", "Current", etc.) is
-  // treated as active and included, rather than requiring one exact
-  // "good" status string.
-  const INACTIVE_KEYWORDS = ['lapsed','lapse','paid-up','paid up','surrendered','expired','cancelled','canceled','terminated','matured'];
+  // Statuses that mean a policy is fully closed out — no further action
+  // possible on Sun Life's end, so these are the only ones still
+  // excluded entirely. Paid-Up and Lapsed are handled separately below
+  // (kept, not skipped) since the advisor still wants visibility into
+  // both, just not mixed into the due-date reminder flow.
+  const DEAD_KEYWORDS = ['surrendered','expired','cancelled','canceled','terminated','matured'];
+  const PAID_UP_KEYWORDS = ['paid-up','paid up'];
+  const LAPSED_KEYWORDS = ['lapsed','lapse'];
 
   for (let i = headerIdx+1; i < rows.length; i++){
     const r = rows[i];
@@ -2753,10 +2822,14 @@ function parseDuesFromWorkbook(workbook){
 
     const policyStatus = idxStatus !== -1 ? String(r[idxStatus]||'').trim() : '';
     const statusLower = policyStatus.toLowerCase();
-    if (idxStatus !== -1 && INACTIVE_KEYWORDS.some(k => statusLower.includes(k))){
+
+    if (idxStatus !== -1 && DEAD_KEYWORDS.some(k => statusLower.includes(k))){
       skippedStatus++;
       continue;
     }
+
+    const isPaidUp = idxStatus !== -1 && PAID_UP_KEYWORDS.some(k => statusLower.includes(k));
+    const isLapsed = idxStatus !== -1 && LAPSED_KEYWORDS.some(k => statusLower.includes(k));
 
     const dueDateRaw = r[idxDueDate];
     const dueDate = dueDateRaw instanceof Date ? dueDateRaw : new Date(String(dueDateRaw));
@@ -2777,8 +2850,17 @@ function parseDuesFromWorkbook(workbook){
       premiumMode: idxMode !== -1 ? String(r[idxMode]||'').trim() : '',
       premiumAmount: amountDue,
       fundValue: fundValue,
-      dueDate: isNaN(dueDate.getTime()) ? null : dueDate.toISOString(),
-      policyStatus: policyStatus
+      // Paid-Up policies never have a real due date going forward — a
+      // policy that's paid-up needs no further premium reminders, so
+      // this is deliberately set to null (never a real Date) regardless
+      // of whatever the export file happened to list, which is exactly
+      // what keeps sendDailyReminders() in Code.gs from ever picking it
+      // up (that function only considers rows where the Due Date cell
+      // is an actual Date, so null here means automatic exclusion).
+      dueDate: isPaidUp ? null : (isNaN(dueDate.getTime()) ? null : dueDate.toISOString()),
+      policyStatus: policyStatus,
+      isPaidUp: isPaidUp,
+      isLapsed: isLapsed
     });
   }
 
@@ -3729,17 +3811,109 @@ async function refreshScheduledBroadcastsList(){
           ? '<span style="color:var(--bad,#EB5757); font-weight:700;">' + s.sentCount + ' sent, ' + s.failedCount + ' failed</span>'
           : '<span style="color:var(--good,#27AE60); font-weight:700;">' + s.sentCount + ' sent</span>';
         const errorLine = s.error ? '<div style="font-size:11px; color:#9CA3AF; margin-top:4px; word-break:break-word;">' + escapeHtml(s.error.length > 150 ? s.error.substring(0, 150) + '\u2026' : s.error) + '</div>' : '';
-        return '<div class="bc-completed-row' + (hasFailures ? ' has-failures' : '') + '">'
+        // Swipe-to-delete: bc-swipe-wrap clips a red delete action behind
+        // the row, which bc-completed-row slides left to reveal via
+        // touch/drag — see wireSwipeToDelete() for the gesture handling.
+        return '<div class="bc-swipe-wrap" data-id="' + escapeHtml(s.scheduleId) + '">'
+          + '<div class="bc-swipe-delete-action">DELETE</div>'
+          + '<div class="bc-completed-row' + (hasFailures ? ' has-failures' : '') + '">'
           + '<strong>' + escapeHtml(s.subject || '(no subject)') + '</strong><br>'
           + '<span style="color:#9CA3AF;">' + when + '</span> \u2014 ' + resultLine
           + errorLine
+          + '</div>'
           + '</div>';
       }).join('');
+      wireSwipeToDelete(completedContainer);
     }
   }catch(err){
     container.innerHTML = '<div style="font-size:13px; color:#9CA3AF;">Could not load scheduled broadcasts.</div>';
     completedContainer.innerHTML = '<div style="font-size:13px; color:#9CA3AF;">Could not load completed broadcasts.</div>';
   }
+}
+
+// Swipe-left-to-delete for Completed Broadcasts rows. Dragging the row
+// left reveals a red DELETE button underneath it (matching the
+// standard iOS/Android "swipe to reveal" pattern); tapping that button
+// confirms the removal, and releasing the swipe without reaching the
+// reveal threshold snaps the row back into place instead of deleting.
+// Supports both touch (mobile) and mouse drag (desktop/testing), since
+// Client Pulse runs in both contexts.
+const SWIPE_REVEAL_PX = 90; // matches .bc-swipe-delete-action's width
+
+function wireSwipeToDelete(container){
+  container.querySelectorAll('.bc-swipe-wrap').forEach(wrap => {
+    const row = wrap.querySelector('.bc-completed-row');
+    const deleteBtn = wrap.querySelector('.bc-swipe-delete-action');
+    const scheduleId = wrap.dataset.id;
+    let startX = 0, currentX = 0, dragging = false;
+
+    function onDragStart(clientX){
+      dragging = true;
+      startX = clientX;
+      row.style.transition = 'none';
+    }
+    function onDragMove(clientX){
+      if (!dragging) return;
+      currentX = clientX - startX;
+      if (currentX > 0) currentX = 0; // only allow swiping left, never right
+      if (currentX < -SWIPE_REVEAL_PX) currentX = -SWIPE_REVEAL_PX; // cap at fully revealed
+      row.style.transform = 'translateX(' + currentX + 'px)';
+    }
+    function onDragEnd(){
+      if (!dragging) return;
+      dragging = false;
+      row.style.transition = 'transform 0.2s ease';
+      // Past halfway → snap fully open (revealed); otherwise snap closed.
+      if (currentX < -SWIPE_REVEAL_PX / 2){
+        row.style.transform = 'translateX(-' + SWIPE_REVEAL_PX + 'px)';
+      } else {
+        row.style.transform = 'translateX(0)';
+      }
+      currentX = 0;
+    }
+
+    row.addEventListener('touchstart', (e) => onDragStart(e.touches[0].clientX), { passive: true });
+    row.addEventListener('touchmove', (e) => onDragMove(e.touches[0].clientX), { passive: true });
+    row.addEventListener('touchend', onDragEnd);
+
+    // Mouse drag support for desktop/testing — mirrors the touch handlers.
+    row.addEventListener('mousedown', (e) => { onDragStart(e.clientX); e.preventDefault(); });
+    document.addEventListener('mousemove', (e) => onDragMove(e.clientX));
+    document.addEventListener('mouseup', onDragEnd);
+
+    deleteBtn.addEventListener('click', async () => {
+      deleteBtn.textContent = '...';
+      deleteBtn.disabled = true;
+      try{
+        const result = await callBackend({ action: 'deleteCompletedBroadcast', scheduleId: scheduleId });
+        if (!result.success){
+          throw new Error(result.error || 'Could not delete.');
+        }
+        // Collapse the row out of the list smoothly rather than an
+        // abrupt disappearance, then remove it from the DOM once the
+        // animation finishes.
+        wrap.style.transition = 'max-height 0.25s ease, opacity 0.25s ease, margin-bottom 0.25s ease';
+        wrap.style.maxHeight = wrap.offsetHeight + 'px';
+        requestAnimationFrame(() => {
+          wrap.style.maxHeight = '0px';
+          wrap.style.opacity = '0';
+          wrap.style.marginBottom = '0px';
+        });
+        setTimeout(() => {
+          wrap.remove();
+          // If that was the last completed broadcast, show the empty state.
+          if (el('bcCompletedList').children.length === 0){
+            el('bcCompletedList').innerHTML = '<div style="font-size:13px; color:#9CA3AF;">No completed broadcasts yet.</div>';
+          }
+        }, 260);
+      }catch(err){
+        showStatus('broadcastStatus','error','Could not delete: ' + err.message);
+        deleteBtn.textContent = 'DELETE';
+        deleteBtn.disabled = false;
+        row.style.transform = 'translateX(0)';
+      }
+    });
+  });
 }
 
 // Loads a queued schedule's saved payload back into the compose area so
@@ -4603,7 +4777,7 @@ el('parseBtn').addEventListener('click', async () => {
     const { rows, skippedStatus } = parseDuesFromWorkbook(workbook);
 
     if (rows.length === 0){
-      showStatus('mainStatus','error','No "Premium paying" policies were found in this file.');
+      showStatus('mainStatus','error','No importable policies were found in this file — everything was either Surrendered, Expired, Cancelled, Terminated, or Matured.');
       el('parseBtn').disabled = false;
       return;
     }
@@ -4613,7 +4787,16 @@ el('parseBtn').addEventListener('click', async () => {
       showStatus('mainStatus','info','Pushing ' + done + ' of ' + total + ' policies to your Dues Tracker…');
     });
 
-    showStatus('mainStatus','success','Done. Your Dues Tracker is up to date.');
+    const lapsedCount = rows.filter(r => r.isLapsed).length;
+    const paidUpCount = rows.filter(r => r.isPaidUp).length;
+    let doneMsg = 'Done. Your Dues Tracker is up to date.';
+    if (lapsedCount > 0 || paidUpCount > 0){
+      const parts = [];
+      if (paidUpCount > 0) parts.push(paidUpCount + ' Paid-Up');
+      if (lapsedCount > 0) parts.push(lapsedCount + ' Lapsed');
+      doneMsg += ' (including ' + parts.join(' and ') + ' — see the Clients page.)';
+    }
+    showStatus('mainStatus','success', doneMsg);
     el('summary').style.display = 'grid';
     el('sumAdded').textContent = result.added ?? '–';
     el('sumUpdated').textContent = result.updated ?? '–';
@@ -5851,10 +6034,21 @@ document.getElementById('gateEmail').addEventListener('keydown', (e) => {
 
 // Store full client lists for filtering
 let allDuesClients = [];
+let allLapsedClients = [];
 let allBirthdayClients = [];
 let duesPageOffset = 0;
+let lapsedPageOffset = 0;
 let birthdayPageOffset = 0;
 const CLIENTS_PER_PAGE = 10;
+
+// Same keyword check the upload parser uses to flag Lapsed policies —
+// duplicated here (rather than shared) since the parser runs at upload
+// time while this runs on data already pulled back from the sheet,
+// where the raw Policy Status text is all that's available to check.
+function isLapsedStatus(policyStatus){
+  const s = String(policyStatus || '').toLowerCase();
+  return s.includes('lapsed') || s.includes('lapse');
+}
 
 // Whether the "excluded from reminders" summary box is expanded
 let duesExcludedExpanded = false;
@@ -5939,34 +6133,72 @@ function updateBirthdayExcludedSummary(){
 const duesPendingChanges = {};
 const birthdayPendingChanges = {};
 
+// Populates the Plan Name filter dropdown with every distinct product
+// name actually present in the current client list, so the options
+// always match real data instead of a hardcoded, possibly-incomplete
+// list of plan names across different insurers/exports.
+function populateDuesPlanFilter(){
+  const select = document.getElementById('duesPlanFilter');
+  if (!select) return;
+  const previousValue = select.value;
+  const plans = Array.from(new Set(allDuesClients.map(c => (c.product || '').trim()).filter(Boolean))).sort();
+  select.innerHTML = '<option value="">All Plans</option>' + plans.map(p => `<option value="${escapeHtml(p)}">${escapeHtml(p)}</option>`).join('');
+  // Preserve the person's selection across a refresh if that plan still exists in the new list.
+  if (plans.includes(previousValue)) select.value = previousValue;
+}
+
+function sortDuesForDisplay(list, sortMode){
+  const sorted = list.slice();
+  if (sortMode === 'fundValueDesc'){
+    sorted.sort((a, b) => (Number(b.fundValue)||0) - (Number(a.fundValue)||0));
+  } else if (sortMode === 'fundValueAsc'){
+    sorted.sort((a, b) => (Number(a.fundValue)||0) - (Number(b.fundValue)||0));
+  } else if (sortMode === 'nameAsc'){
+    sorted.sort((a, b) => String(a.clientName||'').localeCompare(String(b.clientName||'')));
+  } else if (sortMode === 'nameDesc'){
+    sorted.sort((a, b) => String(b.clientName||'').localeCompare(String(a.clientName||'')));
+  } else {
+    // 'dueDate' (default) — reuse the existing soonest/most-overdue-first logic.
+    return sortDuesByDueDate(sorted);
+  }
+  return sorted;
+}
+
 function filterDuesClients(){
   const input = document.getElementById('duesSearchInput');
+  const planFilter = document.getElementById('duesPlanFilter');
+  const sortSelect = document.getElementById('duesSortSelect');
   const countEl = document.getElementById('duesSearchCount');
   if (!input) return;
 
   const query = input.value.toLowerCase().trim();
+  const planValue = planFilter ? planFilter.value : '';
+  const sortMode = sortSelect ? sortSelect.value : 'dueDate';
 
   if (!allDuesClients || allDuesClients.length === 0){
     if (countEl) countEl.textContent = '';
     return;
   }
 
-  if (!query) {
-    renderDuesClientsList(allDuesClients);
-    if (countEl) countEl.textContent = '';
-    return;
+  let filtered = allDuesClients;
+  if (planValue){
+    filtered = filtered.filter(client => (client.product || '').trim() === planValue);
+  }
+  if (query){
+    filtered = filtered.filter(client => {
+      const nameMatch = (client.clientName || '').toLowerCase().includes(query);
+      const productMatch = (client.product || '').toLowerCase().includes(query);
+      const policyMatch = (String(client.policyNumber || '')).toLowerCase().includes(query);
+      return nameMatch || productMatch || policyMatch;
+    });
   }
 
-  const filtered = allDuesClients.filter(client => {
-    const nameMatch = (client.clientName || '').toLowerCase().includes(query);
-    const productMatch = (client.product || '').toLowerCase().includes(query);
-    const policyMatch = (String(client.policyNumber || '')).toLowerCase().includes(query);
-    return nameMatch || productMatch || policyMatch;
-  });
-
+  filtered = sortDuesForDisplay(filtered, sortMode);
   renderDuesClientsList(filtered);
+
   if (countEl) {
-    countEl.textContent = filtered.length === allDuesClients.length ? '' : `${filtered.length} of ${allDuesClients.length} match`;
+    const isFiltered = !!query || !!planValue;
+    countEl.textContent = isFiltered && filtered.length !== allDuesClients.length ? `${filtered.length} of ${allDuesClients.length} match` : '';
   }
 }
 
@@ -6057,12 +6289,17 @@ function renderDuesClientsList(clients, append = false){
     const isChecked = duesPendingChanges.hasOwnProperty(policyKey) ? duesPendingChanges[policyKey] : !!client.sendDues;
     const checked = isChecked ? 'checked' : '';
     const dataKey = 'dues-' + policyKey.replace(/[^a-zA-Z0-9-_]/g, '-');
+    const statusLower = String(client.policyStatus || '').toLowerCase();
+    const isPaidUp = statusLower.includes('paid-up') || statusLower.includes('paid up');
+    const dueLine = isPaidUp
+      ? '<span style="display:inline-block;background:var(--good,#27AE60);color:#fff;font-size:9px;font-weight:700;padding:1px 6px;border-radius:100px;letter-spacing:.3px;margin-right:6px;vertical-align:middle;">PAID-UP</span>No further dues'
+      : 'Due: ' + formatDateDisplay(client.dueDate);
     html += `
       <label style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:#FDF8F0;border-radius:8px;cursor:pointer;transition:background .15s;">
         <input type="checkbox" ${checked} data-key="${dataKey}" data-policy="${escapeHtml(policyKey)}" class="dues-preference-toggle" style="width:18px;height:18px;cursor:pointer;">
         <div style="flex:1;min-width:0;">
           <div style="font-weight:600;color:#0C447C;font-size:13px;">${escapeHtml(client.clientName)}</div>
-          <div style="font-size:11px;color:#6B7280;">${escapeHtml(client.product)} • Due: ${formatDateDisplay(client.dueDate)}</div>
+          <div style="font-size:11px;color:#6B7280;">${escapeHtml(client.product)} • ${dueLine}</div>
         </div>
         <div style="font-size:13px;font-weight:600;color:#0C447C;">PHP ${Number(client.premiumAmount || 0).toLocaleString('en-PH', {minimumFractionDigits: 2})}</div>
       </label>
@@ -6116,6 +6353,209 @@ function setupDuesInfiniteScroll(clients){
   
   container.addEventListener('scroll', handleDuesScroll);
 }
+
+// Lapsed Policies — display-only list, no send-reminder toggle, since
+// a lapsed policy was already excluded from sendDailyReminders() by
+// having no valid due date carried forward. This exists purely so the
+// advisor can see which clients have lapsed, for manual follow-up
+// (a call, a reinstatement offer, etc.) rather than losing visibility
+// into them entirely the way the old "skip on upload" behavior did.
+function renderLapsedClientsList(clients, append = false){
+  const container = document.getElementById('lapsedClientsList');
+  if (!container) return;
+
+  if (!clients || clients.length === 0){
+    if (!append) container.innerHTML = '<p style="color:#9CA3AF;font-size:13px;">No lapsed policies found.</p>';
+    return;
+  }
+
+  if (!append) {
+    lapsedPageOffset = 0;
+    container.innerHTML = '';
+  }
+
+  const start = lapsedPageOffset;
+  const end = start + CLIENTS_PER_PAGE;
+  const pageClients = clients.slice(start, end);
+
+  let html = '<div style="display:flex;flex-direction:column;gap:6px;">';
+  pageClients.forEach(client => {
+    html += `
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;background:#FDF1F0;border-radius:8px;border-left:3px solid var(--bad,#EB5757);">
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:600;color:#0C447C;font-size:13px;">${escapeHtml(client.clientName)}</div>
+          <div style="font-size:11px;color:#6B7280;">${escapeHtml(client.product)} • ${escapeHtml(client.policyStatus || 'Lapsed')}</div>
+        </div>
+        <div style="font-size:13px;font-weight:600;color:#0C447C;">PHP ${Number(client.premiumAmount || 0).toLocaleString('en-PH', {minimumFractionDigits: 2})}</div>
+      </div>
+    `;
+  });
+  html += '</div>';
+
+  if (append) {
+    container.innerHTML += html;
+  } else {
+    container.innerHTML = html;
+  }
+
+  lapsedPageOffset = end;
+
+  if (end < clients.length) {
+    setupLapsedInfiniteScroll(clients);
+  }
+}
+
+function setupLapsedInfiniteScroll(clients){
+  const container = document.getElementById('lapsedClientsList');
+  if (!container) return;
+
+  container.removeEventListener('scroll', handleLapsedScroll);
+
+  function handleLapsedScroll(){
+    const scrollHeight = container.scrollHeight;
+    const scrollTop = container.scrollTop;
+    const clientHeight = container.clientHeight;
+
+    if (scrollTop + clientHeight >= scrollHeight - 100) {
+      if (lapsedPageOffset < clients.length) {
+        renderLapsedClientsList(clients, true);
+      }
+    }
+  }
+
+  container.addEventListener('scroll', handleLapsedScroll);
+}
+
+/* ============================================================
+   CLIENT SUMMARY CHARTS — plain <canvas> bar charts, no external
+   chart library, so this stays a single self-contained file.
+   Both charts are redrawn from allDuesClients any time the dues
+   list refreshes (see refreshDuesClientList), and again on
+   window resize so they stay crisp at the canvas's real
+   displayed width rather than stretching a fixed-resolution image.
+   ============================================================ */
+
+// Shared low-level bar chart renderer — draws vertical bars sized to
+// the canvas's actual CSS width (via devicePixelRatio-aware sizing),
+// with a value label above each bar and a name label below it.
+function drawBarChart(canvas, labels, values, barColor){
+  if (!canvas) return;
+  const dpr = window.devicePixelRatio || 1;
+  const cssWidth = canvas.clientWidth || canvas.parentElement.clientWidth || 300;
+  const cssHeight = parseInt(canvas.style.height, 10) || 200;
+  canvas.width = cssWidth * dpr;
+  canvas.height = cssHeight * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, cssWidth, cssHeight);
+
+  if (!labels.length){
+    ctx.fillStyle = '#9CA3AF';
+    ctx.font = '12px Inter, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('No data yet', cssWidth / 2, cssHeight / 2);
+    return;
+  }
+
+  const maxValue = Math.max(...values, 1);
+  const paddingTop = 22;    // room for the value label above each bar
+  const paddingBottom = 36; // room for the (possibly wrapped) name label below
+  const chartHeight = cssHeight - paddingTop - paddingBottom;
+  const gap = 10;
+  const barWidth = Math.max((cssWidth - gap * (labels.length + 1)) / labels.length, 18);
+
+  labels.forEach((label, i) => {
+    const value = values[i];
+    const barHeight = maxValue > 0 ? (value / maxValue) * chartHeight : 0;
+    const x = gap + i * (barWidth + gap);
+    const y = paddingTop + (chartHeight - barHeight);
+
+    // Bar
+    ctx.fillStyle = barColor;
+    const radius = 4;
+    ctx.beginPath();
+    ctx.moveTo(x, y + barHeight);
+    ctx.lineTo(x, y + radius);
+    ctx.quadraticCurveTo(x, y, x + radius, y);
+    ctx.lineTo(x + barWidth - radius, y);
+    ctx.quadraticCurveTo(x + barWidth, y, x + barWidth, y + radius);
+    ctx.lineTo(x + barWidth, y + barHeight);
+    ctx.closePath();
+    ctx.fill();
+
+    // Value label above the bar
+    ctx.fillStyle = '#0C447C';
+    ctx.font = '700 11px Inter, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(String(value), x + barWidth / 2, y - 6);
+
+    // Name label below the bar — wrapped onto up to 2 lines if the bar is narrow
+    ctx.fillStyle = '#6B7280';
+    ctx.font = '10px Inter, sans-serif';
+    const words = String(label).split(' ');
+    const maxLineWidth = barWidth + gap - 4;
+    let line1 = '', line2 = '';
+    words.forEach(w => {
+      const testLine = line1 ? line1 + ' ' + w : w;
+      if (ctx.measureText(testLine).width <= maxLineWidth || !line1){
+        line1 = testLine;
+      } else {
+        line2 = line2 ? line2 + ' ' + w : w;
+      }
+    });
+    ctx.fillText(line1, x + barWidth / 2, cssHeight - paddingBottom + 14);
+    if (line2) ctx.fillText(line2, x + barWidth / 2, cssHeight - paddingBottom + 26);
+  });
+}
+
+// Fund Value Distribution — buckets every dues client (Premium Paying +
+// Paid-Up; Lapsed policies are excluded here since they're tracked
+// separately and their fund value isn't the focus of this summary)
+// into fixed brackets, matching the requested breakdown: under 100K,
+// then 100K-wide bands up to 500K+.
+function drawFundValueChart(){
+  const canvas = document.getElementById('fundValueChart');
+  if (!canvas) return;
+  const buckets = [
+    { label: '<100K',    min: 0,       max: 100000 },
+    { label: '100-199K', min: 100000,  max: 200000 },
+    { label: '200-299K', min: 200000,  max: 300000 },
+    { label: '300-399K', min: 300000,  max: 400000 },
+    { label: '400-499K', min: 400000,  max: 500000 },
+    { label: '500K+',    min: 500000,  max: Infinity }
+  ];
+  const counts = buckets.map(b => allDuesClients.filter(c => {
+    const fv = Number(c.fundValue) || 0;
+    return fv >= b.min && fv < b.max;
+  }).length);
+  drawBarChart(canvas, buckets.map(b => b.label), counts, '#0C447C');
+}
+
+// Plan Summary — counts how many dues clients (Premium Paying +
+// Paid-Up) fall under each distinct product/plan name, sorted by
+// count descending so the most common plan shows first.
+function drawPlanSummaryChart(){
+  const canvas = document.getElementById('planSummaryChart');
+  if (!canvas) return;
+  const countByPlan = {};
+  allDuesClients.forEach(c => {
+    const plan = (c.product || '').trim() || 'Unspecified';
+    countByPlan[plan] = (countByPlan[plan] || 0) + 1;
+  });
+  const entries = Object.entries(countByPlan).sort((a, b) => b[1] - a[1]);
+  drawBarChart(canvas, entries.map(e => e[0]), entries.map(e => e[1]), '#C99A3B');
+}
+
+function redrawClientSummaryCharts(){
+  drawFundValueChart();
+  drawPlanSummaryChart();
+}
+
+window.addEventListener('resize', () => {
+  // Redraw on resize so bars stay crisp at the canvas's current real
+  // width instead of stretching whatever resolution was drawn earlier.
+  if (document.getElementById('fundValueChart')) redrawClientSummaryCharts();
+});
 
 function renderBirthdayClientsList(clients, append = false){
   const container = document.getElementById('birthdayClientsList');
@@ -6203,6 +6643,7 @@ function setupBirthdayInfiniteScroll(clients){
 
 async function refreshDuesClientList(useCache = false){
   const sub = document.getElementById('duesClientsSub');
+  const lapsedSub = document.getElementById('lapsedClientsSub');
 
   // If a cache exists, show it immediately so the screen isn't blank
   // while the real network request is still in flight.
@@ -6210,9 +6651,13 @@ async function refreshDuesClientList(useCache = false){
     try {
       const cached = JSON.parse(localStorage.getItem(DUES_CACHE_KEY) || 'null');
       if (cached && cached.length) {
-        allDuesClients = cached;
-        renderDuesClientsList(allDuesClients);
+        allDuesClients = cached.filter(c => !isLapsedStatus(c.policyStatus));
+        allLapsedClients = cached.filter(c => isLapsedStatus(c.policyStatus));
+        populateDuesPlanFilter();
+        filterDuesClients();
+        renderLapsedClientsList(allLapsedClients);
         updateDuesExcludedSummary();
+        redrawClientSummaryCharts();
         sub.textContent = allDuesClients.length + ' client(s) — last saved, updating…';
       }
     } catch(e) { /* corrupted cache, ignore and continue to live fetch */ }
@@ -6220,25 +6665,33 @@ async function refreshDuesClientList(useCache = false){
 
   sub.textContent = (sub.textContent.includes('last saved') ? sub.textContent : '🔄 Refreshing…');
   const clients = await fetchDuesClientList();
+  // Lapsed policies are pulled out into their own list — they never had
+  // a working due date to sort by reminders around in the first place,
+  // and mixing them into the main Premium Paying/Paid-Up list would
+  // make "who actually needs a dues reminder" harder to scan at a glance.
+  const activeClients = clients.filter(c => !isLapsedStatus(c.policyStatus));
+  const lapsedClients = clients.filter(c => isLapsedStatus(c.policyStatus));
   // Sort soonest/most-overdue due date first before storing, so every
   // render (full list, searched, or scrolled) follows this order.
-  allDuesClients = sortDuesByDueDate(clients);
+  allDuesClients = sortDuesByDueDate(activeClients);
+  allLapsedClients = lapsedClients.sort((a, b) => String(a.clientName||'').localeCompare(String(b.clientName||'')));
   // Fresh pull from the sheet — clear any unsaved local toggles so we don't
   // show stale state that no longer matches what's on the server.
   Object.keys(duesPendingChanges).forEach(k => delete duesPendingChanges[k]);
-  renderDuesClientsList(allDuesClients);
+  populateDuesPlanFilter();
+  // Re-applies whatever plan filter/sort the person already had selected,
+  // rather than resetting the view back to the default every refresh.
+  filterDuesClients();
+  renderLapsedClientsList(allLapsedClients);
   updateDuesExcludedSummary();
+  redrawClientSummaryCharts();
   sub.textContent = allDuesClients.length + ' client(s) loaded, sorted by closest due date';
+  if (lapsedSub) lapsedSub.textContent = allLapsedClients.length + ' lapsed polic' + (allLapsedClients.length === 1 ? 'y' : 'ies');
 
   // Save the fresh result so next app open can render instantly too.
-  try { localStorage.setItem(DUES_CACHE_KEY, JSON.stringify(allDuesClients)); } catch(e) { /* storage full or unavailable, skip caching */ }
-
-  const searchInput = document.getElementById('duesSearchInput');
-  if (searchInput) {
-    searchInput.value = '';
-    const countEl = document.getElementById('duesSearchCount');
-    if (countEl) countEl.textContent = '';
-  }
+  // Both lists are cached together (as the original unsplit array) so
+  // a single cache key still covers everything, same as before.
+  try { localStorage.setItem(DUES_CACHE_KEY, JSON.stringify(clients)); } catch(e) { /* storage full or unavailable, skip caching */ }
 }
 
 async function refreshBirthdayClientList(useCache = false){
@@ -6475,6 +6928,8 @@ function setupClientsTab(){
     filterDuesClients();
     if (duesSearchInput) duesSearchInput.focus();
   });
+  document.getElementById('duesPlanFilter')?.addEventListener('change', filterDuesClients);
+  document.getElementById('duesSortSelect')?.addEventListener('change', filterDuesClients);
 
   const birthdaySearchInput = document.getElementById('birthdaySearchInput');
   if (birthdaySearchInput) {
@@ -6509,6 +6964,23 @@ function setupClientsTab(){
     this.classList.toggle('collapsed');
   });
 
+  document.getElementById('toggleLapsedClients')?.addEventListener('click', function(){
+    const body = document.getElementById('lapsedClientsBody');
+    body.classList.toggle('collapsed');
+    this.classList.toggle('collapsed');
+  });
+
+  document.getElementById('toggleClientsSummary')?.addEventListener('click', function(){
+    const body = document.getElementById('clientsSummaryBody');
+    const wasCollapsed = body.classList.contains('collapsed');
+    body.classList.toggle('collapsed');
+    this.classList.toggle('collapsed');
+    // A canvas drawn while its container was collapsed (clientWidth=0)
+    // would render at zero size — redraw once it's actually visible
+    // again so the bars appear at the correct width.
+    if (wasCollapsed) redrawClientSummaryCharts();
+  });
+
   // Setup sidebar nav
   document.querySelectorAll('[data-nav="clients"]').forEach(el => {
     el.addEventListener('click', function(e){
@@ -6524,15 +6996,22 @@ function setupClientsTab(){
 (async function() {
   setupPasswordHandling();
   setupClientsTab();
-  // These three calls don't depend on each other, so run them in
-  // parallel instead of waiting for each one to finish before starting
-  // the next — cuts startup time roughly to the slowest single call
-  // instead of the sum of all three.
-  await Promise.all([
-    fetchAccessList(),
-    refreshDuesClientList(true),
-    refreshBirthdayClientList(true)
-  ]);
+  // Only fetchAccessList actually gates what the person sees next (it's
+  // the access-control check the login gate itself depends on) — dues
+  // and birthday client data are NOT needed to show the gate or the
+  // dashboard shell, so blocking on them here was adding two full
+  // Apps Script round-trips (each 1-3+ seconds in practice) to every
+  // single app open before the person could even see the login screen,
+  // even though refreshDuesClientList/refreshBirthdayClientList already
+  // render cached data instantly on their own and only need their live
+  // refresh to happen at some point, not necessarily before first paint.
+  await fetchAccessList();
+  // Fire and forget — these run in the background. Each one shows its
+  // own cached data immediately (useCache=true) and updates in place
+  // once the live fetch resolves, so there's nothing for the boot
+  // sequence to wait on here.
+  refreshDuesClientList(true);
+  refreshBirthdayClientList(true);
   if (!checkAuth()) {
     // Show gate with proper z-index and show class
     const gate = document.getElementById('gateScreen');
