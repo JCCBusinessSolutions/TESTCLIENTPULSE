@@ -1925,6 +1925,9 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
           <button class="btn-ghost" id="bcSaveDraftBtn" style="width:100%;">SAVE AS DRAFT</button>
         </div>
         <div class="status" id="broadcastStatus"></div>
+        <div class="row" style="margin-top:8px;">
+          <button class="btn-primary" id="bcResumeSendBtn" style="width:100%; display:none; background:var(--gold,#C99A3B);">CONTINUE SENDING</button>
+        </div>
 
         <div id="bcDraftsListWrap" style="margin-top:20px;">
           <label>Saved Drafts</label>
@@ -3594,15 +3597,40 @@ let bcAllClients = [];      // full client list, loaded once per picker open
 // once no matter how many policies they hold. Used everywhere
 // bcAllClients gets populated, so this guarantee holds regardless of
 // which code path (fresh fetch, loaded schedule, loaded draft) built it.
+// A client with multiple policies (same email, different products/
+// policy numbers) would otherwise appear once per policy in any raw
+// client list — correct for the Dues Tracker itself, but wrong for a
+// broadcast recipient list, where a person should only ever appear
+// once no matter how many policies they hold. Used everywhere
+// bcAllClients gets populated, so this guarantee holds regardless of
+// which code path (fresh fetch, loaded schedule, loaded draft) built it.
+//
+// When a client's policies have different lapseDate values, the kept
+// entry's lapseDate is explicitly set to the MOST RECENT one across
+// all of that email's policies. Without this, the entry that happened
+// to appear earliest in the underlying sheet would win arbitrarily —
+// meaning the Lapsed Duration filter's result for a multi-policy
+// client depended entirely on unrelated row order, not on any
+// meaningful choice of which lapse date actually represents them.
 function deduplicateClientsByEmail(clients){
   const seenEmails = new Set();
   const result = [];
+  const entryByEmail = {};
   (clients || []).forEach(c => {
     if (!c.email) return;
     const emailKey = c.email.toLowerCase();
-    if (seenEmails.has(emailKey)) return;
-    seenEmails.add(emailKey);
-    result.push(c);
+    if (!seenEmails.has(emailKey)){
+      seenEmails.add(emailKey);
+      result.push(c);
+      entryByEmail[emailKey] = c;
+      return;
+    }
+    // Already have an entry for this email — if this additional policy
+    // has a more recent lapseDate than what's currently kept, adopt it.
+    const kept = entryByEmail[emailKey];
+    if (c.lapseDate && (!kept.lapseDate || c.lapseDate > kept.lapseDate)){
+      kept.lapseDate = c.lapseDate;
+    }
   });
   return result;
 }
@@ -3801,6 +3829,7 @@ function closeBcPicker(){
   el('bcRecipientSummaryText').textContent = n === 0
     ? 'No recipients selected yet'
     : n + ' recipient' + (n === 1 ? '' : 's') + ' selected';
+  invalidateResumableSend();
 }
 el('bcPickerCloseBtn').addEventListener('click', closeBcPicker);
 el('bcPickerDoneBtn').addEventListener('click', closeBcPicker);
@@ -4261,6 +4290,7 @@ let bcUseTemplate = false;
 
 el('bcTemplateToggle').addEventListener('click', async () => {
   bcUseTemplate = !bcUseTemplate;
+  invalidateResumableSend();
   const track = el('bcTemplateToggle').querySelector('.theme-switch-track');
   track.classList.toggle('is-on', bcUseTemplate);
 
@@ -4398,7 +4428,8 @@ async function updateSizeIndicator(){
 // separate listener is needed here for it (a prior version used a
 // fixed-delay setTimeout for that, which raced against the actual
 // fetch time and could report a stale, falsely-small size).
-el('broadcastEditor').addEventListener('input', () => updateSizeIndicator());
+el('broadcastEditor').addEventListener('input', () => { updateSizeIndicator(); invalidateResumableSend(); });
+el('broadcastSubject').addEventListener('input', invalidateResumableSend);
 
 // Images inserted via the toolbar's Image button always go through
 // resizeImageForUpload() and come out compressed — but a person can
@@ -4539,12 +4570,20 @@ el('bcSendBtn').addEventListener('click', async () => {
   const quotaWarning = (remainingQuota !== null && recipients.length > remainingQuota)
     ? '\n\n\u26a0\ufe0f This Gmail account has only ' + remainingQuota + ' email' + (remainingQuota === 1 ? '' : 's') + ' left in today\u2019s sending quota \u2014 the remaining ' + (recipients.length - remainingQuota) + ' recipient' + (recipients.length - remainingQuota === 1 ? '' : 's') + ' won\u2019t receive this until the quota resets (personal Gmail accounts get 100/day; Google Workspace accounts get up to 1,500/day).'
     : '';
+  // Mobile browsers throttle or fully suspend background JavaScript
+  // (including any in-flight network request) once the tab loses focus
+  // — switching to another app, locking the screen, or even swiping to
+  // another browser tab can interrupt a send that's still in progress.
+  // This is a platform limitation, not something the app can work
+  // around from JavaScript, so the only real fix is telling the person
+  // up front to stay on this screen until it finishes.
+  const stayInAppReminder = '\n\n\ud83d\udcf1 Stay on this screen until sending finishes \u2014 switching apps or locking your phone can interrupt it partway through.';
 
   el('bcConfirmCount').textContent =
     'This will send to ' + recipients.length + ' selected client' + (recipients.length === 1 ? '' : 's') +
     ', personalized with each client\u2019s first name' +
     (bcAttachments.length ? ', with ' + bcAttachments.length + ' attachment' + (bcAttachments.length === 1 ? '' : 's') + '.' : '.') +
-    quotaWarning;
+    quotaWarning + stayInAppReminder;
   el('bcConfirmOverlay').style.display = 'flex';
 
   el('bcConfirmCancel').onclick = () => { el('bcConfirmOverlay').style.display = 'none'; };
@@ -4632,23 +4671,55 @@ async function runScheduleBroadcast(recipients, subject, body, useTemplate, sche
   }
 }
 
-async function runBroadcastSend(recipients, subject, body, useTemplate){
+// Remembers the exact state of the most recent broadcast send attempt,
+// so a mid-send failure (network drop, app backgrounded, etc.) can be
+// resumed from exactly where it left off instead of resending to
+// everyone, including recipients who already received it. Cleared once
+// a send completes fully (success or with all recipients accounted
+// for) or once a person starts composing a genuinely new broadcast.
+let bcResumableSend = null; // { subject, body, useTemplate, remainingRows, alreadySentEmails, alreadyFailedReasons }
+
+// A pending "Continue Sending" only makes sense if the message and
+// recipients haven't changed since the failed attempt — resuming with
+// a since-edited subject, body, template setting, or recipient list
+// would send something different from what the earlier partial send
+// actually delivered, defeating the entire point of tracking who
+// already got it. Any meaningful edit clears this out and hides the
+// button, requiring a fresh SEND BROADCAST instead.
+function invalidateResumableSend(){
+  if (bcResumableSend){
+    bcResumableSend = null;
+    updateResumeSendButton();
+  }
+}
+
+async function runBroadcastSend(recipients, subject, body, useTemplate, resumeFrom){
   el('bcSendBtn').disabled = true;
   el('bcPreviewBtn').disabled = true;
-  const rows = recipients.map(c => ({ email: c.email, clientName: c.clientName }));
-  // Smaller batch size than pushDues/pushBirthdays \u2014 each row here
+  // When resuming, only the rows that were never successfully confirmed
+  // are re-attempted — everyone already sent to in a completed batch is
+  // skipped entirely, which is exactly what makes a retry safe rather
+  // than duplicating delivery to most of the list.
+  const rows = resumeFrom ? resumeFrom.remainingRows : recipients.map(c => ({ email: c.email, clientName: c.clientName }));
+  const alreadySentCount = resumeFrom ? resumeFrom.alreadySentEmails.length : 0;
+  const alreadyFailedReasons = resumeFrom ? resumeFrom.alreadyFailedReasons.slice() : [];
+  const totalOriginalCount = alreadySentCount + alreadyFailedReasons.length + rows.length;
+
+  // Smaller batch size than pushDues/pushBirthdays — each row here
   // triggers a real GmailApp.sendEmail() call (much slower than a sheet
   // write), so batches are kept small to stay well under the 30-second
   // Web App execution limit.
   const batchSize = 25;
   const batches = chunkArray(rows, batchSize);
-  let totalSent = 0, totalFailed = 0;
-  const allFailureReasons = [];
+  let totalSent = alreadySentCount, totalFailed = alreadyFailedReasons.length;
+  const allFailureReasons = alreadyFailedReasons;
+  const sentEmailsThisRun = []; // built up as each batch actually completes, for resumability if this run itself fails partway
+  const completedRowEmails = new Set(); // every email whose batch actually finished (sent OR failed) — anything NOT in here still needs to be attempted on resume
 
   try{
     for (let i = 0; i < batches.length; i++){
       showStatus('broadcastStatus','info',
-        'Sending batch ' + (i + 1) + ' of ' + batches.length + ' (' + (totalSent + totalFailed) + ' of ' + rows.length + ' done)\u2026'
+        'Sending batch ' + (i + 1) + ' of ' + batches.length + ' (' + (totalSent + totalFailed) + ' of ' + totalOriginalCount + ' done)\u2026'
       );
       const result = await callBackend({
         action: 'sendBroadcastBatch',
@@ -4661,14 +4732,23 @@ async function runBroadcastSend(recipients, subject, body, useTemplate){
       if (!result.success){
         throw new Error(result.error || 'Unknown error from server');
       }
+      // This entire batch is now confirmed handled by the server — every
+      // row in it either sent successfully or has a recorded failure
+      // reason, so none of these rows need to be retried even if a
+      // later batch in this same run fails.
+      const failedEmailsInBatch = new Set((result.failedEmails || []));
+      batches[i].forEach(row => {
+        completedRowEmails.add(row.email);
+        if (!failedEmailsInBatch.has(row.email)) sentEmailsThisRun.push(row.email);
+      });
       totalSent += result.sent || 0;
       totalFailed += result.failed || 0;
       if (result.failureReasons) allFailureReasons.push(...result.failureReasons);
     }
-    let msg = 'Done \u2014 sent to ' + totalSent + ' of ' + rows.length + ' clients';
+    let msg = 'Done \u2014 sent to ' + totalSent + ' of ' + totalOriginalCount + ' clients';
     if (totalFailed > 0){
       // Show up to 3 concrete reasons instead of a generic "check their
-      // email addresses" \u2014 the real cause (bad address, attachment too
+      // email addresses" — the real cause (bad address, attachment too
       // large, blocked recipient, etc.) is now visible immediately.
       const sample = allFailureReasons.slice(0, 3)
         .map(f => '\u2022 ' + f.email + ': ' + f.reason)
@@ -4679,19 +4759,71 @@ async function runBroadcastSend(recipients, subject, body, useTemplate){
       msg += '.';
     }
     showStatus('broadcastStatus', totalFailed > 0 ? 'error' : 'success', msg);
+    bcResumableSend = null; // fully accounted for — nothing left to resume
   }catch(err){
     const isLikelyNetworkFailure = /load failed|failed to fetch|network ?error/i.test(err.message || '');
+    // Any row not in completedRowEmails was never part of a batch that
+    // actually finished in this run — it genuinely still needs to be
+    // attempted, regardless of whether it succeeded or failed before.
+    const remainingRows = rows.filter(r => !completedRowEmails.has(r.email));
+    if (remainingRows.length > 0){
+      bcResumableSend = {
+        subject: subject,
+        body: body,
+        useTemplate: useTemplate,
+        remainingRows: remainingRows,
+        alreadySentEmails: (resumeFrom ? resumeFrom.alreadySentEmails : []).concat(sentEmailsThisRun),
+        alreadyFailedReasons: allFailureReasons.slice()
+      };
+    } else {
+      bcResumableSend = null;
+    }
     const reason = isLikelyNetworkFailure
-      ? 'the message is likely too large \u2014 try removing an inline image or attachment, or turn off "Use header & footer template"'
+      ? 'the connection was interrupted \u2014 this usually happens if you switched apps, locked your phone, or lost signal while it was sending. Stay on this screen next time until it finishes. (If it keeps happening even while staying in the app, try removing an inline image or attachment, or turn off "Use header & footer template".)'
       : 'Error: ' + err.message;
+    const resumeHint = bcResumableSend
+      ? ' Tap "CONTINUE SENDING" below to send only to the ' + bcResumableSend.remainingRows.length + ' who haven\u2019t received it yet \u2014 no one will get a duplicate.'
+      : '';
     showStatus('broadcastStatus','error',
-      'Stopped after ' + totalSent + ' of ' + rows.length + ' sent (already delivered \u2014 safe to retry, but it will resend to everyone in this selection since broadcasts don\u2019t track who already got it). ' + reason
+      'Stopped after ' + totalSent + ' of ' + totalOriginalCount + ' sent. ' + reason + resumeHint
     );
+    updateResumeSendButton();
   }finally{
     el('bcSendBtn').disabled = false;
     el('bcPreviewBtn').disabled = false;
   }
 }
+
+// Shows or hides the "CONTINUE SENDING" button based on whether a
+// resumable partial send is currently pending.
+function updateResumeSendButton(){
+  const btn = el('bcResumeSendBtn');
+  if (!btn) return;
+  if (bcResumableSend){
+    btn.style.display = 'block';
+    btn.textContent = 'CONTINUE SENDING (' + bcResumableSend.remainingRows.length + ' remaining)';
+  } else {
+    btn.style.display = 'none';
+  }
+}
+
+el('bcResumeSendBtn').addEventListener('click', () => {
+  if (!bcResumableSend) return;
+  const remaining = bcResumableSend.remainingRows.length;
+  el('bcConfirmCount').textContent =
+    'This will continue sending to the ' + remaining + ' recipient' + (remaining === 1 ? '' : 's') + ' who haven\u2019t received this broadcast yet' +
+    ' \u2014 everyone already sent to will NOT receive a duplicate.' +
+    '\n\n\ud83d\udcf1 Stay on this screen until sending finishes \u2014 switching apps or locking your phone can interrupt it partway through.';
+  el('bcConfirmOverlay').style.display = 'flex';
+  el('bcConfirmCancel').onclick = () => { el('bcConfirmOverlay').style.display = 'none'; };
+  el('bcConfirmSend').onclick = async () => {
+    el('bcConfirmOverlay').style.display = 'none';
+    const resumeState = bcResumableSend;
+    await runBroadcastSend(null, resumeState.subject, resumeState.body, resumeState.useTemplate, resumeState);
+    updateResumeSendButton();
+  };
+});
+
 
 el('saveBranding').addEventListener('click', async () => {
   const config = {
