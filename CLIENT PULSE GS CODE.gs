@@ -1148,11 +1148,26 @@ function sendBroadcastEmailBatch(rows, subject, htmlBody, attachments, useTempla
   const failedEmails = [];
   const failureReasons = []; // { email, reason } — surfaced to the frontend so
                               // "1 failed" isn't a dead end with no explanation
+  let quotaExhausted = false; // once true, every remaining row in this batch is marked failed without attempting to send
 
   rows.forEach(r => {
     if (!r.email) {
       failed++;
       failureReasons.push({ email: '(blank)', reason: 'No email address on file for this client.' });
+      return;
+    }
+    if (quotaExhausted){
+      // The daily sending quota was already confirmed exhausted earlier
+      // in this same batch — attempting the remaining recipients would
+      // only produce the identical rejection for every one of them
+      // (exactly what happened in a real broadcast: 44 and 17 failures,
+      // all the same "quota" error). Marking them failed immediately
+      // avoids wasting Apps Script execution time on calls guaranteed
+      // to fail, and keeps the failure list to one clear explanation
+      // instead of dozens of duplicates of the same message.
+      failed++;
+      failedEmails.push(r.email);
+      failureReasons.push({ email: r.email, reason: 'Not attempted \u2014 daily sending quota was already exhausted earlier in this send.' });
       return;
     }
     try{
@@ -1198,10 +1213,18 @@ function sendBroadcastEmailBatch(rows, subject, htmlBody, attachments, useTempla
         ? ' [diagnostic: htmlBody=' + (processedHtmlBodyBytes/1024).toFixed(0) + 'KB, bodyImages=' + (bodyImageBytesTotal/1024/1024).toFixed(2) + 'MB, template=' + templateMB.toFixed(2) + 'MB, attachments=' + (attachmentBytesTotal/1024/1024).toFixed(2) + 'MB, precheck total=' + totalMB.toFixed(2) + 'MB]'
         : '';
       failureReasons.push({ email: r.email, reason: translatedReason + diagnosticSuffix });
+      // A quota-exhausted error is a hard stop for the rest of this
+      // batch — unlike a bad email address or an isolated failure,
+      // every subsequent send would fail for the exact same reason
+      // until the quota resets, which the daily limit does NOT do
+      // mid-batch.
+      if (/quota|invoked too many times|masyadong madaming beses.*araw/i.test(err.message || '')){
+        quotaExhausted = true;
+      }
     }
   });
 
-  return { sent: sent, failed: failed, failedEmails: failedEmails, failureReasons: failureReasons, total: rows.length };
+  return { sent: sent, failed: failed, failedEmails: failedEmails, failureReasons: failureReasons, total: rows.length, quotaExhausted: quotaExhausted };
 }
 
 /* ============================================================
@@ -1673,8 +1696,16 @@ function toEnglishErrorMessage(rawMessage){
       english: 'Email is too large to send \u2014 remove an inline image or attachment and try again.' },
     { match: /Invalid email|[Mm]ali ang email|hindi wasto ang email/i,
       english: 'Invalid email address.' },
-    { match: /quota|limitasyon.*araw|daily.*limit/i,
-      english: 'Daily sending limit reached for this Google account \u2014 try again tomorrow, or send in smaller batches.' },
+    // Matches both the English quota message ("Service invoked too
+    // many times for one day") and its actual Tagalog form as returned
+    // by Google for this account ("...masyadong madaming beses
+    // pinagana sa isang araw...") — the previous pattern only matched
+    // the word "limitasyon" near "araw", which this specific message
+    // never contains, so it fell through untranslated and displayed as
+    // raw Tagalog error text instead of a clear, actionable English
+    // explanation.
+    { match: /quota|limitasyon.*araw|daily.*limit|invoked too many times|masyadong madaming beses.*araw/i,
+      english: 'Daily sending limit reached for this Google account (personal Gmail accounts get 100 emails/day; Google Workspace accounts get up to 1,500/day) \u2014 try again after the quota resets, or send the rest tomorrow.' },
     { match: /Recipient address required|kinakailangan ang address/i,
       english: 'Recipient address is missing or invalid.' },
     { match: /rate limit|masyadong marami/i,
