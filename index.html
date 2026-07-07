@@ -2931,7 +2931,21 @@ function parseDuesFromWorkbook(workbook){
     if (idxLapseDate !== -1){
       const lapseDateRaw = r[idxLapseDate];
       const parsedLapseDate = lapseDateRaw instanceof Date ? lapseDateRaw : new Date(String(lapseDateRaw));
-      if (!isNaN(parsedLapseDate.getTime())) lapseDate = parsedLapseDate.toISOString();
+      // Reject dates that are invalid OR in the future OR absurdly far in
+      // the past. Without this, a stray non-date value in the Lapse Date
+      // cell (a leftover number, a typo, anything the fallback `new
+      // Date(String(...))` can misread) can silently become a garbage
+      // date far outside any real range. A "lapse" in the future is
+      // never legitimate, and it's exactly this kind of misparse that
+      // later shows up as a negative "years since lapse" and wrongly
+      // slots an old record into the "Less than 1 year lapsed" bucket.
+      const now = Date.now();
+      const hundredYearsMs = 100 * 365.25 * 24 * 60 * 60 * 1000;
+      if (!isNaN(parsedLapseDate.getTime()) &&
+          parsedLapseDate.getTime() <= now &&
+          parsedLapseDate.getTime() >= now - hundredYearsMs){
+        lapseDate = parsedLapseDate.toISOString();
+      }
     }
 
     let issuedDate = null;
@@ -6418,7 +6432,16 @@ function yearsSinceLapse(lapseDateStr){
   const lapseDate = new Date(lapseDateStr);
   if (isNaN(lapseDate.getTime())) return null;
   const msPerYear = 365.25 * 24 * 60 * 60 * 1000;
-  return (Date.now() - lapseDate.getTime()) / msPerYear;
+  const years = (Date.now() - lapseDate.getTime()) / msPerYear;
+  // Guard against garbage/misparsed dates (e.g. a stray number in the
+  // Lapse Date column getting read as a year, landing the "date" far in
+  // the future). A real lapse can't be in the future, and a negative
+  // "years since lapse" would otherwise satisfy every lt1/lt2/lt3 bucket
+  // at once, which is exactly how an old record can wrongly show up
+  // under "Less than 1 year lapsed". Also reject absurdly old parses
+  // (100+ years) as clearly not a real lapse date.
+  if (years < 0 || years > 100) return null;
+  return years;
 }
 
 // Tracks the currently selected Lapsed sort/filter mode, mirroring
