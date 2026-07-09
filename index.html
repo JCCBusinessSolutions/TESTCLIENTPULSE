@@ -2822,6 +2822,29 @@ async function decryptXlsxBytes(fileBytes, password){
    claimed once, so a generic word like "name" can't accidentally
    steal the column meant for a more specific field.
    ============================================================ */
+// Parses a raw cell value (Date object, string, or number) into an ISO
+// date string, but rejects anything that lands outside a sane calendar
+// range instead of trusting whatever `new Date(String(raw))` comes up
+// with. Without this, a stray non-date value in the cell — a leftover
+// number, a typo, a serial number read as a bare year — can silently
+// become a garbage date (e.g. year 44197) that then breaks any "years
+// since X" math built on top of it. `allowFuture` should be true only
+// for dates that are legitimately upcoming (like a premium due date);
+// everything else (lapse date, issue date, birth date) must be in the
+// past. `maxSpanYears` bounds how far into the past (or, when
+// allowFuture is true, how far in either direction) a parse is still
+// considered plausible.
+function parseSafeDate(raw, { allowFuture = false, maxSpanYears = 100 } = {}){
+  const parsed = raw instanceof Date ? raw : new Date(String(raw));
+  if (isNaN(parsed.getTime())) return null;
+  const now = Date.now();
+  const spanMs = maxSpanYears * 365.25 * 24 * 60 * 60 * 1000;
+  if (!allowFuture && parsed.getTime() > now) return null;
+  if (parsed.getTime() < now - spanMs) return null;
+  if (allowFuture && parsed.getTime() > now + spanMs) return null;
+  return parsed;
+}
+
 function findColumn(headers, claimed, exactTerms, fuzzyTerms){
   const lower = headers.map(h => String(h||'').toLowerCase().trim());
   for (const term of exactTerms){
@@ -2925,34 +2948,27 @@ function parseDuesFromWorkbook(workbook){
     const isLapsed = idxStatus !== -1 && LAPSED_KEYWORDS.some(k => statusLower.includes(k));
 
     const dueDateRaw = r[idxDueDate];
-    const dueDate = dueDateRaw instanceof Date ? dueDateRaw : new Date(String(dueDateRaw));
+    // Due dates are legitimately upcoming, so future dates are allowed —
+    // but still bounded, so a misread serial number can't land 40,000+
+    // years out and pass as valid.
+    const dueDateParsed = parseSafeDate(dueDateRaw, { allowFuture: true, maxSpanYears: 30 });
 
     let lapseDate = null;
     if (idxLapseDate !== -1){
       const lapseDateRaw = r[idxLapseDate];
-      const parsedLapseDate = lapseDateRaw instanceof Date ? lapseDateRaw : new Date(String(lapseDateRaw));
-      // Reject dates that are invalid OR in the future OR absurdly far in
-      // the past. Without this, a stray non-date value in the Lapse Date
-      // cell (a leftover number, a typo, anything the fallback `new
-      // Date(String(...))` can misread) can silently become a garbage
-      // date far outside any real range. A "lapse" in the future is
-      // never legitimate, and it's exactly this kind of misparse that
-      // later shows up as a negative "years since lapse" and wrongly
-      // slots an old record into the "Less than 1 year lapsed" bucket.
-      const now = Date.now();
-      const hundredYearsMs = 100 * 365.25 * 24 * 60 * 60 * 1000;
-      if (!isNaN(parsedLapseDate.getTime()) &&
-          parsedLapseDate.getTime() <= now &&
-          parsedLapseDate.getTime() >= now - hundredYearsMs){
-        lapseDate = parsedLapseDate.toISOString();
-      }
+      // A lapse can't be in the future. Rejecting invalid/future/absurdly
+      // old parses here stops a garbage date from later showing up as a
+      // negative "years since lapse", which would otherwise slot an old
+      // record into the "Less than 1 year lapsed" bucket.
+      const parsedLapseDate = parseSafeDate(lapseDateRaw, { allowFuture: false, maxSpanYears: 100 });
+      if (parsedLapseDate) lapseDate = parsedLapseDate.toISOString();
     }
 
     let issuedDate = null;
     if (idxIssuedDate !== -1){
       const issuedDateRaw = r[idxIssuedDate];
-      const parsedIssuedDate = issuedDateRaw instanceof Date ? issuedDateRaw : new Date(String(issuedDateRaw));
-      if (!isNaN(parsedIssuedDate.getTime())) issuedDate = parsedIssuedDate.toISOString();
+      const parsedIssuedDate = parseSafeDate(issuedDateRaw, { allowFuture: false, maxSpanYears: 100 });
+      if (parsedIssuedDate) issuedDate = parsedIssuedDate.toISOString();
     }
 
     // Prefer a "total premium" style column when present and nonzero (the
@@ -2978,7 +2994,7 @@ function parseDuesFromWorkbook(workbook){
       // what keeps sendDailyReminders() in Code.gs from ever picking it
       // up (that function only considers rows where the Due Date cell
       // is an actual Date, so null here means automatic exclusion).
-      dueDate: isPaidUp ? null : (isNaN(dueDate.getTime()) ? null : dueDate.toISOString()),
+      dueDate: isPaidUp ? null : (dueDateParsed ? dueDateParsed.toISOString() : null),
       // Only meaningful for Lapsed rows — a distinct column from Due
       // Date, since the export tracks exactly when a policy actually
       // lapsed separately from its regular premium due date.
@@ -5607,14 +5623,16 @@ function parseBirthdaysFromWorkbook(workbook){
     if (!email) continue;
 
     const dobRaw = r[idxDob];
-    const dob = dobRaw instanceof Date ? dobRaw : new Date(String(dobRaw));
+    // Birth dates must be in the past, and bounded to a plausible human
+    // lifespan so a misread cell can't become a garbage year.
+    const dobParsed = parseSafeDate(dobRaw, { allowFuture: false, maxSpanYears: 120 });
 
     out.push({
       fullName: fullName,
       email: email,
       contactNumber: idxContact !== -1 ? String(r[idxContact]||'').trim() : '',
       location: idxLocation !== -1 ? String(r[idxLocation]||'').trim() : '',
-      dateOfBirth: isNaN(dob.getTime()) ? null : dob.toISOString()
+      dateOfBirth: dobParsed ? dobParsed.toISOString() : null
     });
   }
 
@@ -6948,7 +6966,7 @@ function renderFundValueChart(){
       <div class="fv-bar-col" data-bucket="${escapeHtml(b.label)}" style="flex:1; display:flex; flex-direction:column; align-items:center; cursor:pointer;">
         <div style="font-size:11px; font-weight:700; color:#0C447C; margin-bottom:4px;">${count}</div>
         <div style="width:100%; max-width:44px; height:${barAreaHeight}px; display:flex; align-items:flex-end;">
-          <div style="width:100%; height:${barHeight}px; background:${isExpanded ? '#0C447C' : '#5B87AD'}; border-radius:4px 4px 0 0; transition:background .15s;"></div>
+          <div style="width:100%; height:${barHeight}px; background:${isExpanded ? '#A67B2D' : '#C99A3B'}; border-radius:4px 4px 0 0; transition:background .15s;"></div>
         </div>
         <div style="font-size:10px; color:#6B7280; margin-top:6px; text-align:center;">${b.label}</div>
       </div>
@@ -7010,6 +7028,25 @@ const PLAN_SUMMARY_DEFAULT_LIMIT = 10;
 let planSummaryShowAll = false;
 let planSummaryExpandedPlan = null; // remembers which plan's breakdown is open
 
+// A distinct pastel color per plan, so the list is differentiable at a
+// glance instead of every row using the same gold tint. Colors are
+// assigned by each plan's rank (biggest plan first) rather than by
+// name, so the palette stays stable regardless of "Show all" being
+// toggled — a plan's color never changes once assigned. Cycles back to
+// the start if there are ever more plans than colors.
+const PLAN_SUMMARY_PALETTE = [
+  '99,138,199',   // pastel blue
+  '212,142,142',  // pastel red
+  '145,178,140',  // pastel green
+  '201,154,59',   // house gold (kept for the top/most common plan)
+  '163,140,201',  // pastel purple
+  '201,150,110',  // pastel peach
+  '110,164,178',  // pastel teal
+  '201,120,150',  // pastel pink
+  '160,160,110',  // pastel olive
+  '140,150,201'   // pastel periwinkle
+];
+
 function renderPlanSummaryList(){
   const container = document.getElementById('planSummaryList');
   const showAllBtn = document.getElementById('planSummaryShowAllBtn');
@@ -7037,10 +7074,14 @@ function renderPlanSummaryList(){
     const pct = maxCount > 0 ? Math.max((count / maxCount) * 100, 3) : 0; // min 3% so even small counts show a sliver
     const isExpanded = planSummaryExpandedPlan === plan;
     const breakdownHtml = isExpanded ? renderPlanBreakdownHtml(plan, planClients) : '';
+    // Rank within the full (not just visible) list, so a plan's color
+    // never shifts when "Show all" is toggled.
+    const rank = entries.findIndex(([p]) => p === plan);
+    const rgb = PLAN_SUMMARY_PALETTE[rank % PLAN_SUMMARY_PALETTE.length];
     return `
       <div>
         <div class="plan-summary-row" data-plan="${escapeHtml(plan)}" style="position:relative; margin-bottom:8px; border-radius:8px; overflow:hidden; background:#FDF8F0; cursor:pointer;">
-          <div style="position:absolute; top:0; left:0; bottom:0; width:${pct}%; background:rgba(201,154,59,${isExpanded ? '0.35' : '0.22'});"></div>
+          <div style="position:absolute; top:0; left:0; bottom:0; width:${pct}%; background:rgba(${rgb},${isExpanded ? '0.55' : '0.35'});"></div>
           <div style="position:relative; display:flex; justify-content:space-between; align-items:center; padding:8px 12px; font-size:13px;">
             <span style="color:#374151; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; padding-right:10px;">${escapeHtml(plan)}</span>
             <span style="font-weight:700; color:#0C447C; flex-shrink:0;">${count}</span>
