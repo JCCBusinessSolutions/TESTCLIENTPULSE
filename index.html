@@ -187,6 +187,14 @@
     animation: setupBlink 1.1s ease-in-out infinite;
   }
 
+  @keyframes inactivityWarningBlink{
+    0%, 100% { background:#B91C1C; }
+    50% { background:#7A1414; }
+  }
+  #inactivityWarningBanner.blinking{
+    animation: inactivityWarningBlink 1.1s ease-in-out infinite;
+  }
+
   .due-item{
     border:1px solid var(--line); border-radius:16px;
     padding:14px 16px; margin-bottom:10px; background:var(--cream);
@@ -943,7 +951,8 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
      (a sticky-positioned header was visually escaping the overlay). */
   body:not(.cp-authed) #mobileHeaderBar,
   body:not(.cp-authed) #mainContentWrapper,
-  body:not(.cp-authed) #mobileBottomNav { display:none !important; }
+  body:not(.cp-authed) #mobileBottomNav,
+  body:not(.cp-authed) #inactivityWarningBanner { display:none !important; }
   
   .gate-card { width:100%; max-width:420px; background:rgb(0, 59, 122); border:1px solid rgba(0, 59, 122, 0.5); border-radius:16px; padding:32px 24px; text-align:center; box-shadow:0 4px 20px rgba(0,0,0,0.15); }
   body.dark-mode .gate-card { background:rgb(0, 59, 122); border-color:rgba(0, 59, 122, 0.5); }
@@ -1268,6 +1277,27 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
 </div>
 
 <!-- ============================================================
+     INACTIVITY LOCK SCREEN
+     Shown after a successful login if the backend reports the
+     advisor hasn't uploaded a Dues or Birthday list before the
+     calendar-anchored deadline (see checkAdvisorActiveStatus).
+     Uploading is still reachable from here — the point is to make
+     the paused state obvious and give a direct path back in, not
+     to hide the app entirely.
+     ============================================================ -->
+<div id="inactivityLockScreen" style="display:none; position:fixed; inset:0; z-index:9998; background:rgba(12,68,124,0.97); backdrop-filter:blur(4px); align-items:center; justify-content:center; padding:24px;">
+  <div style="max-width:420px; width:100%; background:#fff; border-radius:16px; padding:32px 28px; text-align:center; box-shadow:0 20px 60px rgba(0,0,0,0.35);">
+    <div style="font-size:40px; margin-bottom:10px;">⏸️</div>
+    <div style="font-family:'Playfair Display',serif; font-size:20px; font-weight:700; color:#0C447C; margin-bottom:10px;">Dashboard Paused</div>
+    <div id="inactivityLockMessage" style="font-size:14px; color:#444; line-height:1.6; margin-bottom:22px;">
+      No client list has been uploaded in a while, so this dashboard has been paused.
+    </div>
+    <button class="gate-btn gate-btn-gold" style="width:100%;" onclick="goToUploadFromLock()">UPLOAD MY CLIENT LIST</button>
+    <div style="font-size:11px; color:#999; margin-top:14px;">Uploading a fresh Dues or Birthday list reactivates everything immediately.</div>
+  </div>
+</div>
+
+<!-- ============================================================
      DESKTOP SIDEBAR
      ============================================================ -->
 <aside class="hidden lg:flex lg:flex-col fixed left-0 top-0 h-screen w-[280px] bg-navy z-30">
@@ -1295,6 +1325,20 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
     <div class="sidebar-link" onclick="location.reload()"><span>↩️</span>Refresh App</div>
   </div>
 </aside>
+
+<!-- ============================================================
+     INACTIVITY WARNING BANNER
+     Shown once the advisor is within REMINDER_DAYS_BEFORE_LOCK days
+     of the hard-stop/purge deadline (same window as the email
+     reminder — this is the in-app equivalent, for anyone who
+     doesn't check that inbox). Blinks continuously and stays up
+     until a real upload pushes the deadline back out, since a
+     one-time dismiss would defeat the point of an urgent warning.
+     ============================================================ -->
+<div id="inactivityWarningBanner" style="display:none; position:sticky; top:0; z-index:31; align-items:center; gap:10px; padding:10px 16px; background:#B91C1C; color:#fff; font-size:13px; font-weight:600; text-align:center; justify-content:center; flex-wrap:wrap;">
+  <span id="inactivityWarningText">⚠️ Your data will be cleared soon — upload your latest list now.</span>
+  <button type="button" onclick="goToUploadFromBanner()" style="background:#fff; color:#B91C1C; border:none; border-radius:6px; padding:4px 12px; font-size:12px; font-weight:700; cursor:pointer;">UPLOAD NOW</button>
+</div>
 
 <!-- ============================================================
      MOBILE HEADER
@@ -3037,6 +3081,93 @@ async function callBackend(payload){
     err.message = err.message + ' (actual request size: ~' + actualRequestMB + 'MB)';
     throw err;
   }
+}
+
+/* ============================================================
+   INACTIVITY HARD-STOP (frontend side)
+   ------------------------------------------------------------
+   The actual enforcement lives in Code.gs — every restricted
+   backend action already refuses itself once the calendar-anchored
+   deadline passes. This just makes that state visible instead of
+   the dashboard silently showing stale/empty data: it checks status
+   right after login (and right after any successful upload), and
+   shows/hides a full-screen pause notice accordingly.
+   ============================================================ */
+async function checkAdvisorActiveStatus(){
+  const url = getScriptUrl();
+  if (!url) return; // no Script URL configured yet — nothing to check
+  try{
+    const res = await fetch(url + '?action=getAdvisorActiveStatus');
+    const data = await res.json();
+    if (data && data.active === false){
+      showInactivityLock(data);
+      hideInactivityWarningBanner(); // full lock screen already covers it
+    } else {
+      hideInactivityLock();
+      if (data && typeof data.daysUntilLock === 'number' && data.daysUntilLock <= REMINDER_DAYS_BEFORE_LOCK_FRONTEND){
+        showInactivityWarningBanner(data.daysUntilLock);
+      } else {
+        hideInactivityWarningBanner();
+      }
+    }
+  }catch(e){
+    // Transient network issue — don't lock someone out over a blip.
+  }
+}
+
+// Mirrors REMINDER_DAYS_BEFORE_LOCK in Code.gs — kept as a separate
+// frontend constant since this file can't import from the Apps Script
+// project directly. Keep these two in sync if either changes.
+const REMINDER_DAYS_BEFORE_LOCK_FRONTEND = 5;
+
+function showInactivityWarningBanner(daysUntilLock){
+  const textEl = document.getElementById('inactivityWarningText');
+  if (textEl){
+    textEl.textContent = '⚠️ ' + daysUntilLock + ' day' + (daysUntilLock === 1 ? '' : 's') + ' left to upload your latest policy and client list — after that, your data will be cleared.';
+  }
+  const el = document.getElementById('inactivityWarningBanner');
+  if (el){
+    el.style.display = 'flex';
+    el.classList.add('blinking');
+  }
+}
+
+function hideInactivityWarningBanner(){
+  const el = document.getElementById('inactivityWarningBanner');
+  if (el){
+    el.style.display = 'none';
+    el.classList.remove('blinking');
+  }
+}
+
+function goToUploadFromBanner(){
+  scrollToSection('upload');
+}
+
+function showInactivityLock(status){
+  const days = status && typeof status.daysSinceLastUpload === 'number' ? status.daysSinceLastUpload : null;
+  const msgEl = document.getElementById('inactivityLockMessage');
+  if (msgEl){
+    msgEl.textContent = (days !== null
+      ? 'No client list has been uploaded in ' + days + ' days, so this dashboard has been paused.'
+      : 'No client list has been uploaded in a while, so this dashboard has been paused.'
+    ) + ' Upload your latest Dues or Birthday list to reactivate everything right away.';
+  }
+  const el = document.getElementById('inactivityLockScreen');
+  if (el) el.style.display = 'flex';
+}
+
+function hideInactivityLock(){
+  const el = document.getElementById('inactivityLockScreen');
+  if (el) el.style.display = 'none';
+}
+
+function goToUploadFromLock(){
+  // Dismiss the overlay so the upload controls underneath are reachable
+  // — uploading is exactly the one action still allowed while paused,
+  // and it's the only way to reactivate.
+  hideInactivityLock();
+  scrollToSection('upload');
 }
 
 // Splits a flat array into chunks of at most `size` items each.
@@ -5163,6 +5294,7 @@ el('parseBtn').addEventListener('click', async () => {
     el('sumAdded').textContent = result.added ?? '–';
     el('sumUpdated').textContent = result.updated ?? '–';
     el('sumSkipped').textContent = skippedStatus;
+    checkAdvisorActiveStatus();
 
   }catch(e){
     let msg = e.message;
@@ -5690,6 +5822,7 @@ el('birthdayParseBtn').addEventListener('click', async () => {
     el('bdaySumAdded').textContent = result.added ?? '–';
     el('bdaySumUpdated').textContent = result.updated ?? '–';
     el('bdaySumTotal').textContent = result.total ?? rows.length;
+    checkAdvisorActiveStatus();
 
   }catch(e){
     let msg = e.message;
@@ -6374,6 +6507,7 @@ function hideGate() {
     fetchBrandConfig().then(config => populateBrandingFields(config));
     fetchSendHour().then(hour => populateSendHour(hour));
     refreshPersonalLink();
+    checkAdvisorActiveStatus();
   } catch (e) {
     var emailError = document.getElementById('emailError');
     if (emailError) emailError.textContent = 'Something went wrong unlocking the dashboard: ' + e.message;
