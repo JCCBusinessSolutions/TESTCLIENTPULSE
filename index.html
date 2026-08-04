@@ -1533,7 +1533,7 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
         <div class="flex items-start gap-1.5 mt-3">
           <span class="text-[11px] flex-shrink-0">🔒</span>
           <ul class="footer-note !text-left m-0 pl-4" style="list-style:disc;">
-            <li>JCC Business Solutions · Dues Tracker Parser · Premium Paying and Paid-Up policies are imported together (Paid-Up policies won't receive due reminders, since they have no due date). Lapsed policies are imported separately for follow-up. Skipped automatically: Surrendered, Expired, Cancelled, Terminated, Matured.</li>
+            <li>JCC Business Solutions · Dues Tracker Parser · Premium Paying and Paid-Up policies are imported together (Paid-Up policies won't receive due reminders, since they have no due date). Lapsed policies are imported separately for follow-up. Skipped automatically: Surrendered, Expired, Cancelled, Terminated, Matured, Death/Deceased.</li>
             <li class="mt-1">The developer has no access to uploaded files under any circumstance — everything is processed in your browser and pushed only into your own Google Sheet once set up.</li>
           </ul>
         </div>
@@ -3120,7 +3120,7 @@ function parseDuesFromWorkbook(workbook){
   // excluded entirely. Paid-Up and Lapsed are handled separately below
   // (kept, not skipped) since the advisor still wants visibility into
   // both, just not mixed into the due-date reminder flow.
-  const DEAD_KEYWORDS = ['surrendered','expired','cancelled','canceled','terminated','matured'];
+  const DEAD_KEYWORDS = ['surrendered','expired','cancelled','canceled','terminated','matured','death','deceased','died'];
   const PAID_UP_KEYWORDS = ['paid-up','paid up'];
   const LAPSED_KEYWORDS = ['lapsed','lapse'];
 
@@ -6426,6 +6426,11 @@ function parseBirthdaysFromWorkbook(workbook){
   const idxContact   = findColumn(headers, claimed, ['contact number','mobile number','phone number'], ['contact','mobile','phone']);
   const idxLocation  = findColumn(headers, claimed, ['location','address','city'], ['location','address','city']);
   const idxName      = findColumn(headers, claimed, ['client name','full name','insured name'], ['client name','full name','name']);
+  // Optional — not every Client List export includes this column, so
+  // idxStatus can legitimately be -1. When present, it's used only to
+  // exclude deceased clients from the Birthday Tracker; every other
+  // status value (Active, etc.) is imported exactly as before.
+  const idxStatus    = findColumn(headers, claimed, ['client status','death status','status'], ['status']);
 
   const missingLabels = [];
   if (idxName === -1) missingLabels.push('a client/full name column');
@@ -6433,7 +6438,13 @@ function parseBirthdaysFromWorkbook(workbook){
   if (idxDob === -1) missingLabels.push('a date of birth column');
   if (missingLabels.length > 0) throw new Error('MISSING_COLUMNS: ' + missingLabels.join(', '));
 
+  // Same case-insensitive substring matching style as the dues parser's
+  // DEAD_KEYWORDS — a deceased client should never receive a birthday
+  // greeting, regardless of which of these words the export happens to use.
+  const DEATH_KEYWORDS = ['death','deceased','died'];
+
   const out = [];
+  let skippedDeath = 0;
   for (let i = headerIdx+1; i < rows.length; i++){
     const r = rows[i];
     if (!r) continue;
@@ -6441,6 +6452,14 @@ function parseBirthdaysFromWorkbook(workbook){
     if (!fullName) continue;
     const email = String(r[idxEmail]||'').trim();
     if (!email) continue;
+
+    if (idxStatus !== -1){
+      const statusLower = String(r[idxStatus]||'').trim().toLowerCase();
+      if (DEATH_KEYWORDS.some(k => statusLower.includes(k))){
+        skippedDeath++;
+        continue;
+      }
+    }
 
     const dobRaw = r[idxDob];
     // Birth dates must be in the past, and bounded to a plausible human
@@ -6456,7 +6475,7 @@ function parseBirthdaysFromWorkbook(workbook){
     });
   }
 
-  return { rows: out };
+  return { rows: out, skippedDeath };
 }
 
 let selectedBirthdayFile = null;
@@ -6492,7 +6511,7 @@ el('birthdayParseBtn').addEventListener('click', async () => {
 
     showStatus('birthdayMainStatus','info','Parsing rows…');
     const workbook = XLSX.read(decrypted, {type:'array', cellDates:true});
-    const { rows } = parseBirthdaysFromWorkbook(workbook);
+    const { rows, skippedDeath } = parseBirthdaysFromWorkbook(workbook);
 
     if (rows.length === 0){
       showStatus('birthdayMainStatus','error','No client rows with a recorded birthdate were found in this file.');
@@ -6505,7 +6524,11 @@ el('birthdayParseBtn').addEventListener('click', async () => {
       showStatus('birthdayMainStatus','info','Pushing ' + done + ' of ' + total + ' clients to your Birthday Tracker…');
     });
 
-    showStatus('birthdayMainStatus','success','Done. Your Birthday Tracker is up to date.');
+    let birthdayDoneMsg = 'Done. Your Birthday Tracker is up to date.';
+    if (skippedDeath > 0){
+      birthdayDoneMsg += ' (' + skippedDeath + ' skipped \u2014 marked deceased.)';
+    }
+    showStatus('birthdayMainStatus','success', birthdayDoneMsg);
     el('birthdaySummary').style.display = 'grid';
     el('bdaySumAdded').textContent = result.added ?? '–';
     el('bdaySumUpdated').textContent = result.updated ?? '–';
