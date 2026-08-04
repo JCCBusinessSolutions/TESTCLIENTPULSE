@@ -3183,14 +3183,15 @@ function parseDuesFromWorkbook(workbook){
       premiumMode: idxMode !== -1 ? String(r[idxMode]||'').trim() : '',
       premiumAmount: amountDue,
       fundValue: fundValue,
-      // Paid-Up policies never have a real due date going forward — a
-      // policy that's paid-up needs no further premium reminders, so
-      // this is deliberately set to null (never a real Date) regardless
-      // of whatever the export file happened to list, which is exactly
-      // what keeps sendDailyReminders() in Code.gs from ever picking it
-      // up (that function only considers rows where the Due Date cell
-      // is an actual Date, so null here means automatic exclusion).
-      dueDate: isPaidUp ? null : (dueDateParsed ? dueDateParsed.toISOString() : null),
+      // Paid-Up policies never have a real due date going forward, and a
+      // Lapsed policy shouldn't be pestered for a payment on a policy
+      // that's no longer active — both are deliberately set to null
+      // regardless of whatever the export file happened to list, which
+      // is exactly what keeps sendDailyReminders() in Code.gs from ever
+      // picking them up (that function only considers rows where the
+      // Due Date cell is an actual Date, so null here means automatic
+      // exclusion for both).
+      dueDate: (isPaidUp || isLapsed) ? null : (dueDateParsed ? dueDateParsed.toISOString() : null),
       // Only meaningful for Lapsed rows — a distinct column from Due
       // Date, since the export tracks exactly when a policy actually
       // lapsed separately from its regular premium due date.
