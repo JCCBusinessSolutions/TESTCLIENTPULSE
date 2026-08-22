@@ -1280,6 +1280,419 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
       <button type="button" class="gate-link" onclick="showEmailStep()">Back to login</button>
       <div class="gate-footer">JCC BUSINESS SOLUTIONS&trade;<br>All Rights Reserved 2026</div>
     </div>
+
+    <!-- Step 5: Policy Agreement acceptance — hard block shown when the
+         backend's login response is AGREEMENT_REQUIRED. There is no
+         dismiss/skip; the Advisor cannot proceed to the dashboard until
+         they check the box and click Accept. Text is intentionally
+         hardcoded here (not fetched from a config sheet) — only the
+         VERSION and EFFECTIVE DATE shown below come from the backend
+         (set from the Admin Command Center's Policy Agreement panel);
+         wording changes are a code change, same as the standalone
+         JCC_POLICY_AGREEMENTS.html page. -->
+    <div id="policyAgreementStep" style="display:none;">
+      <div class="gate-hint" style="margin-bottom:10px;">
+        Please review and accept the current CLIENT PULSE Policy Agreement to continue.
+        <span style="display:block;margin-top:4px;font-weight:700;color:#0C447C;">Version <span id="paVersionLabel">—</span> &middot; Effective <span id="paEffectiveDateLabel">—</span></span>
+      </div>
+      <div id="policyAgreementScrollBox" onscroll="_checkPolicyAgreementScrolled()" style="max-height:260px;overflow-y:auto;border:1px solid #ddd;border-radius:8px;padding:14px;font-size:12.5px;line-height:1.6;color:#333;background:#fff;margin-bottom:8px;">
+<p style="font-weight:700;color:#0C447C;font-size:13.5px;margin:0 0 8px;">Part 1: 15-Day Limited Warranty</p>
+<p style="font-weight:700;color:#0C447C;margin:14px 0 6px;">1. Overview</p>
+  <p>
+    JCC Business Solutions ("JCC," "we," "us") provides a 15-calendar-day limited warranty
+    on each one-time purchase of its digital tools (the "App"). Under this warranty, JCC's
+    first commitment is to <strong>fix confirmed software defects ("Bugs") free of charge</strong>.
+    If, after a genuine good-faith attempt, a confirmed Bug cannot reasonably be fixed, the
+    Buyer becomes eligible for a <strong>full refund</strong> of the purchase price for that
+    App, subject to the exceptions in Section 5(c) below, which mainly cover situations where
+    the issue was caused by the Buyer's own changes to the Google Sheet or the App itself.
+  </p>
+
+  <p style="font-weight:700;color:#0C447C;margin:14px 0 6px;">2. Warranty Period</p>
+  <p>
+    The warranty period begins on the date the App (or access to it) is delivered to the
+    Buyer, whether by file transfer, shared link, or successful first setup, and ends
+    fifteen (15) calendar days after that date. The Buyer must <strong>report</strong> the
+    issue within this 15-day period for it to be covered. Once a report is timely received,
+    JCC will continue working toward a resolution (fix, or refund if unfixable) even if that
+    process extends a few days beyond the 15-day window. Requests first reported after the
+    15-day period are not covered, though JCC may, at its sole discretion, still choose to
+    assist.
+  </p>
+
+  <p style="font-weight:700;color:#0C447C;margin:14px 0 6px;">3. What Is Covered</p>
+  <p>During the warranty period, JCC will investigate and, where confirmed, correct at no cost any Bug that:</p>
+  <ol>
+    <li>Causes a core, advertised feature of the App to fail to work as demonstrated or described at the time of purchase;</li>
+    <li>Is reproducible by JCC using the App in its standard, supported configuration (hosted on GitHub Pages or an equivalent static host, connected to a correctly configured Google Sheets + Apps Script backend matching the setup guide provided); and</li>
+    <li>Is reported by the Buyer with enough detail (see Section 6) for JCC to identify and reproduce the issue.</li>
+  </ol>
+
+  <div style="background:#FDF8F0;border-left:3px solid #C99A3B;border-radius:6px;padding:10px 12px;margin:10px 0;">
+    <strong>In short:</strong> if a feature that was working at delivery breaks due to an
+    error in JCC's code, that's covered. If it's something the Buyer's setup, sheet, or
+    third-party service is doing, that's outside this warranty.
+  </div>
+
+  <p style="font-weight:700;color:#0C447C;margin:14px 0 6px;">4. What Is Not Covered</p>
+  <p>This warranty does not cover the items below, and they are not eligible for either a free fix or a refund:</p>
+  <div style="background:#FDECEC;border-left:3px solid #C0392B;border-radius:6px;padding:10px 12px;margin:10px 0;">
+    <ul >
+      <li>Issues caused by the Buyer's own configuration, such as incorrect Apps Script deployment settings, mismatched or renamed Google Sheet column headers, missing sheet permissions, or expired or revoked Google account access;</li>
+      <li>Changes, outages, or policy updates made by third-party platforms outside JCC's control (Google Sheets, Google Apps Script, GitHub Pages, EmailJS, the Buyer's browser, etc.);</li>
+      <li>Modifications made to the App's source code by the Buyer or any third party after delivery;</li>
+      <li>New feature requests, design changes, or enhancements not part of the App's advertised functionality at the time of purchase. These are not Bugs;</li>
+      <li>Compatibility issues from unsupported browsers or devices (supported: current Chrome, Safari, and Edge, desktop and mobile);</li>
+      <li>Data loss or formatting issues originating from the Buyer's own Google Sheet (deleted rows, changed headers, manual edits);</li>
+      <li>Problems caused by the Buyer's internet connection, device, or hosting account; or</li>
+      <li>Unauthorized resale, redistribution, or use of the App beyond the single-buyer license granted at purchase.</li>
+    </ul>
+  </div>
+
+  <p style="font-weight:700;color:#0C447C;margin:14px 0 6px;">5. Remedy</p>
+
+  <p><strong>(a) Primary Remedy: Repair.</strong> JCC's first obligation under this warranty
+  is to use commercially reasonable, good-faith efforts to fix confirmed Bugs (as defined in
+  Section 3) and deliver a corrected version of the App to the Buyer within a reasonable
+  time, generally within five (5) to seven (7) business days of confirming the defect,
+  depending on complexity.</p>
+
+  <p><strong>(b) Fallback Remedy: Refund for Unfixable Defects.</strong> If, after a genuine
+  good-faith effort, JCC determines that a confirmed Bug cannot reasonably be resolved, the
+  Buyer is entitled to a full refund of the purchase price paid for that App, provided none
+  of the exceptions in Section 5(c) apply.</p>
+
+  <div style="background:#FDF8F0;border-left:3px solid #C99A3B;border-radius:6px;padding:10px 12px;margin:10px 0;">
+    <strong>In short:</strong> JCC will always try to fix a genuine Bug first. If it truly
+    can't be fixed, the Buyer gets their money back, unless the reason it can't be fixed
+    traces back to changes the Buyer (or someone on the Buyer's behalf) made to the Google
+    Sheet or the App itself.
+  </div>
+
+  <p><strong>(c) Exceptions: When the Refund in Section 5(b) Does Not Apply.</strong>
+  The Buyer is not entitled to a refund under Section 5(b) if the unresolved issue is caused
+  by, or traceable to, any of the following:</p>
+  <div style="background:#FDECEC;border-left:3px solid #C0392B;border-radius:6px;padding:10px 12px;margin:10px 0;">
+    <ul >
+      <li>Any modification, alteration, or customization the Buyer (or a third party on the Buyer's behalf) made to the Google Sheet(s) used by the App, including renamed or deleted columns, changed headers, altered formulas, or restructured tabs;</li>
+      <li>Any modification, alteration, or customization the Buyer (or a third party on the Buyer's behalf) made to the App's source code or files after delivery; or</li>
+      <li>Any of the circumstances already listed in Section 4 (e.g., third-party platform changes, unsupported browsers, the Buyer's own configuration errors, internet or device issues). Since these do not qualify as a confirmed Bug in the first place, they are not eligible for a fix or a refund under this warranty.</li>
+    </ul>
+  </div>
+  <p>
+    In these cases, JCC may still choose, at its sole discretion, to assist the Buyer.
+    For example, JCC may offer guidance on restoring the original Sheet structure, but is
+    under no obligation to do so.
+  </p>
+
+  <p><strong>(d) How a Refund Is Processed.</strong> Where a refund applies under Section
+  5(b), JCC will process it to the original payment method or channel used by the Buyer
+  within a reasonable time after confirming the defect is unfixable. JCC reserves the right
+  to request that the Buyer confirm removal or discontinued use of the App as a condition
+  of the refund.</p>
+
+  <p style="font-weight:700;color:#0C447C;margin:14px 0 6px;">6. How to Request Warranty Support</p>
+  <p>To request a warranty fix (and, if applicable, a refund under Section 5(b)), the Buyer must, within the 15-day period:</p>
+  <ol>
+    <li>Contact JCC through <strong>jccbusinesssolutions@gmail.com</strong>;</li>
+    <li>Provide proof of purchase (invoice number, receipt, or payment confirmation);</li>
+    <li>Describe the issue in detail, including the steps to reproduce it; and</li>
+    <li>If possible, provide a screenshot or screen recording of the issue.</li>
+  </ol>
+
+  <p style="font-weight:700;color:#0C447C;margin:14px 0 6px;">7. Limitation of Liability</p>
+  <p>
+    To the fullest extent permitted by law, JCC's total liability for any claim relating to
+    the App, whether under this warranty, contract, or otherwise, is limited to the
+    purchase price actually paid by the Buyer for that App. JCC is not liable for indirect,
+    incidental, consequential, or special damages, including lost income, lost data, or
+    business interruption.
+  </p>
+
+  <p style="font-weight:700;color:#0C447C;margin:14px 0 6px;">8. Single License, No Resale</p>
+  <p>
+    The App is licensed for use by the individual or business that purchased it. This
+    warranty is personal to the original Buyer and does not transfer if the App is resold,
+    shared, or distributed to a third party.
+  </p>
+
+  <p style="font-weight:700;color:#0C447C;margin:14px 0 6px;">9. Changes to This Policy</p>
+  <p>
+    JCC may update this warranty policy for future purchases. Changes will not apply
+    retroactively to purchases already made before the update.
+  </p>
+
+  <p style="font-weight:700;color:#0C447C;margin:14px 0 6px;">10. Governing Law</p>
+  <p>
+    This warranty is governed by the laws of the Republic of the Philippines. Nothing in
+    this policy is intended to waive any right that cannot be waived under Philippine law,
+    including applicable provisions of the Civil Code and the Consumer Act of the
+    Philippines (Republic Act No. 7394), to the extent such laws apply to the transaction.
+  </p>
+<p style="font-weight:700;color:#0C447C;font-size:13.5px;margin:20px 0 8px;border-top:1px solid #e7dfcf;padding-top:16px;">Part 2: Data Privacy Policy</p>
+<p style="font-weight:700;color:#0C447C;margin:14px 0 6px;">1. Who This Policy Is For</p>
+  <p>
+    Client Pulse is a software application developed and licensed by JCC Business Solutions
+    ("JCC," "we," "us") for financial advisors ("Advisor," "you") to help manage client
+    premium due reminders, birthday greetings, and related client-servicing activities. This
+    policy applies to Advisors who use Client Pulse and explains how personal information may
+    be handled in connection with the application. For purposes of this policy, "Client Data"
+    means personal information relating to the Advisor's own clients that the Advisor chooses
+    to enter into or use with Client Pulse.
+  </p>
+
+  <p style="font-weight:700;color:#0C447C;margin:14px 0 6px;">2. Roles and Responsibilities Under the Data Privacy Act</p>
+  <p>
+    The Advisor generally determines which clients are entered into Client Pulse, what
+    information is used, why the information is processed, and how the Advisor communicates
+    with those clients. Accordingly, the Advisor is generally responsible for determining and
+    maintaining the appropriate lawful basis for processing Client Data and for complying with
+    applicable privacy laws, company policies, contractual obligations, and client-facing
+    requirements.
+  </p>
+  <p>
+    JCC is primarily a software provider. Client Pulse is designed so that JCC does not
+    ordinarily receive, store, or directly access the Advisor's Client Data during normal
+    operation. However, the legal classification of a party under the Data Privacy Act
+    depends on the actual nature of the processing activity. If JCC actually receives or
+    processes personal information in a particular circumstance, JCC will handle that
+    information only for the legitimate purpose for which it was provided and in accordance
+    with applicable data privacy requirements.
+  </p>
+
+  <p style="font-weight:700;color:#0C447C;margin:14px 0 6px;">3. How Client Pulse Actually Handles Data</p>
+  <p>This is the part most Advisors want to understand clearly, so here it is in plain terms:</p>
+  <ol>
+    <li>Client Pulse runs as a web application inside the Advisor's own browser.</li>
+    <li>The Advisor creates and controls their own Google Sheet, using their own Google account, as the application's client database.</li>
+    <li>The Advisor deploys their own Google Apps Script (a small backend program) under their own Google account. This is what actually stores and retrieves Client Data such as names, policy numbers, premium amounts, due dates, contact numbers, and birthdays.</li>
+    <li>The Client Pulse frontend communicates directly with the Advisor's own Apps Script deployment and Google Sheet, rather than routing the Advisor's Client Data through a JCC-operated central database.</li>
+    <li>JCC does not maintain a central database containing the Advisor's Client Data as part of normal operation, does not require the Advisor to upload their complete client database to JCC, and does not require the Advisor's Google password.</li>
+  </ol>
+
+  <div style="background:#EAF4EC;border-left:3px solid #27AE60;border-radius:6px;padding:10px 12px;margin:10px 0;">
+    <strong>The key point:</strong> Client Pulse is designed so that the Advisor does not need
+    to upload their client database to JCC Business Solutions. JCC does not ordinarily
+    receive, store, or directly access the Advisor's Client Data during normal operation.
+    During normal operation, Client Data remains within the Advisor's Google environment,
+    subject to Google's own services, infrastructure, and policies, and the Advisor's own
+    account and security settings. This does not mean Client Data can never leave the
+    Advisor's Google account — third-party services and communication tools the Advisor
+    configures may process certain information depending on the Advisor's own setup.
+  </div>
+
+  <p style="font-weight:700;color:#0C447C;margin:14px 0 6px;">4. What JCC Does Not Ordinarily Collect or Access</p>
+  <p>During normal operation, JCC does not ordinarily receive or maintain a copy of the Advisor's:</p>
+  <ul>
+    <li>Client names</li>
+    <li>Policy numbers</li>
+    <li>Premium or amount due information</li>
+    <li>Client contact numbers, email addresses, or home addresses</li>
+    <li>Birthdates or other Client Data entered into the Advisor's own Google Sheet</li>
+  </ul>
+  <p>
+    These types of Client Data are not ordinarily collected or stored by JCC as part of the
+    normal operation of Client Pulse. This section describes how the app ordinarily operates;
+    Section 6 explains the limited circumstances in which incidental access may occur.
+  </p>
+
+  <p style="font-weight:700;color:#0C447C;margin:14px 0 6px;">5. What JCC May Collect</p>
+  <p>JCC may collect limited information about the Advisor as a customer or user of the software, such as:</p>
+  <ul>
+    <li>Advisor name, email address, and contact details;</li>
+    <li>Purchase or subscription information and payment confirmation or transaction reference details, which the Advisor provides directly;</li>
+    <li>Information voluntarily provided in customer support communications;</li>
+    <li>Information reasonably necessary to provide technical support or administer the software license.</li>
+  </ul>
+  <p>
+    JCC will not intentionally use Advisor information or Client Data for unrelated purposes,
+    including selling personal information, profiling clients, or marketing to the Advisor's
+    clients.
+  </p>
+
+  <p style="font-weight:700;color:#0C447C;margin:14px 0 6px;">6. Data Minimization</p>
+  <p>
+    Client Pulse is designed around data minimization. Advisors should only enter information
+    reasonably necessary for the intended client-servicing functions of the application, and
+    should avoid entering unnecessary sensitive or unrelated information.
+  </p>
+  <div style="background:#FDECEC;border-left:3px solid #C0392B;border-radius:6px;padding:10px 12px;margin:10px 0;">
+    <ul >
+      <li>Advisors should NOT enter passwords, authentication credentials, security codes, or other authentication secrets into Client Pulse;</li>
+      <li>Advisors should avoid entering unnecessary health information, financial information, government identification numbers, or other sensitive information unless genuinely necessary for the Advisor's legitimate workflow and permitted by applicable law and organizational policy.</li>
+    </ul>
+  </div>
+
+  <p style="font-weight:700;color:#0C447C;margin:14px 0 6px;">7. Technical Support and Incidental Access</p>
+  <p>
+    JCC does not ordinarily require access to an Advisor's Client Data in order to provide
+    Client Pulse. If an Advisor voluntarily provides a screenshot, screen recording, sample
+    export, error message, log, or other material for technical support, that material may
+    incidentally contain limited Client Data. Advisors are strongly encouraged to remove
+    client names, mask policy numbers and contact numbers, remove unnecessary financial
+    information, redact sensitive personal information, and use test or anonymized data
+    whenever reasonably practicable when sharing material for support.
+  </p>
+  <p>JCC will use any Client Data voluntarily provided during technical support only for the specific support, troubleshooting, security, or maintenance purpose for which it was provided. JCC will not:</p>
+  <ul>
+    <li>sell the information;</li>
+    <li>use it for advertising or profiling;</li>
+    <li>use it to build a separate client database;</li>
+    <li>disclose it to unrelated third parties; or</li>
+    <li>use it for a purpose unrelated to the support request.</li>
+  </ul>
+  <p>
+    JCC will restrict access to voluntarily provided support information to persons who
+    reasonably need it for the relevant support or security purpose, and will retain it only
+    for as long as reasonably necessary, subject to legitimate legal, contractual, or
+    recordkeeping requirements.
+  </p>
+
+  <p style="font-weight:700;color:#0C447C;margin:14px 0 6px;">8. Data Security</p>
+  <p>
+    Client Pulse is designed to minimize JCC's direct exposure to Client Data. JCC maintains
+    reasonable and appropriate technical and organizational safeguards for the systems and
+    information under JCC's control, which may include HTTPS/TLS connections, controlled
+    access to JCC systems, reasonable source-code access controls, secure coding practices,
+    minimizing unnecessary collection of personal information, avoiding intentional storage of
+    Client Data on JCC-controlled infrastructure, avoiding unnecessary inclusion of personal
+    information in application logs, and reasonable vulnerability identification, remediation,
+    and incident response procedures.
+  </p>
+  <p>
+    The Advisor is responsible for securing the Google environment used for their Client Data,
+    including their Google account, passwords, multi-factor authentication, device security,
+    and Google Sheet sharing permissions. JCC cannot guarantee the security of third-party
+    infrastructure, or of the Advisor's own devices, networks, Google account, or third-party
+    services.
+  </p>
+
+  <p style="font-weight:700;color:#0C447C;margin:14px 0 6px;">9. Security Incidents and Personal Data Breaches</p>
+  <p>
+    JCC maintains reasonable procedures for identifying, assessing, containing, investigating,
+    documenting, and mitigating security incidents involving systems or information under
+    JCC's control. If JCC becomes aware of an actual or reasonably suspected security incident
+    involving Client Data that JCC has received or processed, JCC will assess the nature and
+    scope of the incident, take reasonable steps to contain and mitigate it, investigate
+    relevant technical circumstances, document material facts and remedial actions, notify the
+    affected Advisor as appropriate, and reasonably cooperate with the Advisor where required
+    by applicable law or contractual obligations. Any notification, reporting, or cooperation
+    obligations will be determined based on the nature and circumstances of the incident and
+    applicable Philippine privacy laws and regulations.
+  </p>
+
+  <p style="font-weight:700;color:#0C447C;margin:14px 0 6px;">10. Rights of the Advisor's Clients</p>
+  <p>
+    The Advisor is generally responsible for managing requests and obligations relating to
+    their client relationships and Client Data, because the Advisor determines the purposes
+    and means of the relevant client processing. The Advisor is responsible for ensuring there
+    is an appropriate lawful basis for processing Client Data, and for satisfying applicable
+    transparency, notice, access, correction, objection, erasure/blocking, and other
+    data-subject requirements.
+  </p>
+  <p>
+    If JCC receives a privacy request relating to Client Data that JCC actually holds or
+    processes, JCC will reasonably cooperate with the Advisor as required by applicable law.
+  </p>
+
+  <p style="font-weight:700;color:#0C447C;margin:14px 0 6px;">11. Data Retention</p>
+  <p>
+    JCC does not ordinarily retain the Advisor's Client Data, because Client Data is designed
+    to remain in the Advisor's own Google environment. The Advisor is responsible for
+    establishing appropriate retention and deletion practices for Client Data in accordance
+    with applicable law, company policy, contractual requirements, and legitimate business
+    purposes.
+  </p>
+  <p>
+    JCC may retain limited Advisor/customer information necessary for purchase records,
+    billing, subscription administration, customer support, contractual records, security
+    purposes, or legal and regulatory obligations. If Client Data is voluntarily provided to
+    JCC during support, it will be retained only for as long as reasonably necessary for the
+    stated purpose, subject to legitimate legal or recordkeeping requirements.
+  </p>
+
+  <p style="font-weight:700;color:#0C447C;margin:14px 0 6px;">12. Third-Party Services Involved</p>
+  <p>Client Pulse may rely on third-party services selected or configured by the Advisor, or used to deliver the application, including:</p>
+  <ul>
+    <li>Google Sheets, Google Apps Script, and Google Drive, under the Advisor's own Google account, which may process Client Data;</li>
+    <li>GitHub Pages or another static hosting provider, used primarily to deliver the Client Pulse application itself, and not intended to serve as JCC's central Client Data database;</li>
+    <li>Email or messaging services the Advisor configures, which may process limited information such as email addresses, telephone numbers, or message content as necessary to deliver the communication.</li>
+  </ul>
+  <p>
+    Third-party services are governed by their own terms, privacy policies, security
+    practices, and infrastructure. JCC does not control the infrastructure or privacy
+    practices of third-party providers, and their use by such providers does not by itself
+    guarantee compliance with any particular law or standard.
+  </p>
+
+  <p style="font-weight:700;color:#0C447C;margin:14px 0 6px;">13. Organizational and Company Policy Compliance</p>
+  <p>
+    The Advisor is responsible for ensuring that their use of Client Pulse is permitted under
+    all applicable company, employer, insurance company, agency, contractual, regulatory, and
+    data privacy requirements that apply to the Advisor. For Advisors affiliated with a
+    financial institution, insurance company, agency, or other organization, the Advisor
+    should obtain any required internal approval before using Client Pulse with organizational
+    or client information.
+  </p>
+  <p>
+    Client Pulse is an independent software product developed by JCC Business Solutions. This
+    policy does not state or imply that any insurance company, agency, or other organization
+    has approved, endorsed, or authorized Client Pulse, or that Client Pulse is compliant with
+    any particular organization's internal requirements, unless actual written authorization
+    exists.
+  </p>
+
+  <p style="font-weight:700;color:#0C447C;margin:14px 0 6px;">14. Children's Data</p>
+  <p>
+    Client Pulse is not specifically designed for the collection or management of children's
+    personal data. Advisors should avoid entering information relating to minors unless such
+    processing is necessary, lawful, and permitted under applicable organizational policies.
+  </p>
+
+  <p style="font-weight:700;color:#0C447C;margin:14px 0 6px;">15. Changes to This Policy</p>
+  <p>
+    JCC may update this policy to reflect changes in Client Pulse, in applicable law, in
+    National Privacy Commission guidance, in security practices, or in third-party services.
+    Material changes will be reflected by an updated effective date and, where applicable, an
+    updated agreement version number. Changes will not be represented as retroactively
+    removing any right or obligation that cannot legally be waived.
+  </p>
+
+  <p style="font-weight:700;color:#0C447C;margin:14px 0 6px;">16. Governing Law</p>
+  <p>
+    This policy is governed by the laws of the Republic of the Philippines, including
+    Republic Act No. 10173 (Data Privacy Act of 2012), its Implementing Rules and
+    Regulations, and applicable issuances of the National Privacy Commission. Nothing in this
+    policy is intended to waive any right, remedy, or obligation that cannot lawfully be
+    waived under Philippine law.
+  </p>
+
+  <p style="font-weight:700;color:#0C447C;margin:14px 0 6px;">17. Contact</p>
+  <p>
+    Questions about Client Pulse as software, privacy questions concerning JCC-controlled
+    information, security concerns, technical support, and privacy-related communications
+    concerning information actually received by JCC may be sent to
+    <strong>jccbusinesssolutions@gmail.com</strong>. Questions about how a specific Advisor is
+    handling a particular client's personal data should generally be directed to that
+    Advisor, since the Advisor is responsible for that client's information under the Data
+    Privacy Act.
+  </p>
+
+  <div style="background:#FDF8F0;border-left:3px solid #C99A3B;border-radius:6px;padding:10px 12px;margin:10px 0;">
+    This policy describes the privacy and security practices of Client Pulse and does not
+    constitute legal advice. Advisors remain responsible for determining their own
+    obligations under applicable law and organizational policies.
+  </div>
+      </div>
+      <div id="policyAgreementScrollHint" style="font-size:11px;color:#C99A3B;font-weight:700;margin:0 2px 10px;">Scroll to the bottom to continue &darr;</div>
+      <label style="display:flex;align-items:flex-start;gap:8px;margin:4px 2px 12px;font-size:12.5px;color:#333;cursor:pointer;">
+        <input type="checkbox" id="policyAgreementCheckbox" disabled style="width:16px;height:16px;flex-shrink:0;margin-top:2px;cursor:pointer;accent-color:#0C447C;">
+        I have read, understood, and agree to the CLIENT PULSE Policy Agreement, including the 15-Day Limited Warranty and Data Privacy Policy.
+      </label>
+      <div class="gate-error" id="policyAgreementError"></div>
+      <button class="gate-btn" onclick="submitPolicyAgreement()" id="policyAgreementBtn">ACCEPT &amp; CONTINUE</button>
+      <div class="gate-footer">JCC BUSINESS SOLUTIONS&trade;<br>All Rights Reserved 2026</div>
+    </div>
     </div>
   </div>
 </div>
@@ -1302,6 +1715,21 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
     </div>
     <button class="gate-btn gate-btn-gold" style="width:100%;" onclick="goToUploadFromLock()">UPLOAD MY CLIENT LIST</button>
     <div style="font-size:11px; color:#999; margin-top:14px;">Uploading a fresh Dues or Birthday list reactivates everything immediately.</div>
+  </div>
+</div>
+
+<!-- Subscription expiration notice — unlike the inactivity lock above,
+     this is dismissible and never blocks the dashboard. Shown once per
+     session start (fresh login or a restored session on app open),
+     not on every 30-second session-check poll. -->
+<div id="expirationNoticeOverlay" style="display:none; position:fixed; inset:0; z-index:9997; background:rgba(12,68,124,0.85); backdrop-filter:blur(3px); align-items:center; justify-content:center; padding:24px;" onclick="if(event.target===this) closeExpirationNotice();">
+  <div style="max-width:420px; width:100%; background:#fff; border-radius:16px; padding:32px 28px; text-align:center; box-shadow:0 20px 60px rgba(0,0,0,0.35); position:relative;">
+    <button onclick="closeExpirationNotice()" style="position:absolute; top:14px; right:14px; background:none; border:none; font-size:20px; color:#999; cursor:pointer; line-height:1; padding:4px;" aria-label="Close">✕</button>
+    <div id="expirationNoticeIcon" style="font-size:40px; margin-bottom:10px;">⏳</div>
+    <div id="expirationNoticeTitle" style="font-family:'Playfair Display',serif; font-size:20px; font-weight:700; color:#0C447C; margin-bottom:10px;">Subscription Renewal</div>
+    <div id="expirationNoticeMessage" style="font-size:14px; color:#444; line-height:1.6; margin-bottom:22px;"></div>
+    <button class="gate-btn gate-btn-gold" style="width:100%;" onclick="renewSubscriptionClicked()">RENEW SUBSCRIPTION</button>
+    <div style="font-size:11px; color:#999; margin-top:14px;">Questions about renewing? Email Jccbusinesssolutions16@gmail.com</div>
   </div>
 </div>
 
@@ -1440,7 +1868,7 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
 
     <div class="card" id="dueTodayCard" data-section="duetracker">
       <div class="card-header-row" id="dueTodayHeader">
-        <h2 style="margin:0;">Due Today</h2>
+        <h2 style="margin:0;">Due Today &amp; Advance Reminders</h2>
         <button class="collapse-toggle" id="toggleDueToday" aria-label="Collapse">&#8943;</button>
       </div>
 
@@ -1967,7 +2395,16 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
         <p class="sub">Write a custom message and choose exactly who receives it. Use <strong>{FirstName}</strong> anywhere in your message and it will be replaced with each client's actual first name.</p>
       </div>
 
+      <div id="bcQuotaBox" style="display:flex; align-items:center; gap:10px; margin-bottom:16px; padding:12px 14px; background:#EFF6FF; border:1px solid #BFDBFE; border-radius:10px; font-size:13px; color:#1E3A5F;">
+        <span style="font-size:18px; line-height:1;">📧</span>
+        <span id="bcQuotaBoxText">Checking today's remaining email quota…</span>
+      </div>
+
       <div class="card" id="broadcastCard">
+        <div id="bcEditingDraftBanner" style="display:none; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; margin-bottom:14px; padding:10px 12px; background:#FDF6E3; border:1px solid #F0DFA6; border-radius:8px; font-size:13px; color:#7A5C00;">
+          <span style="flex:1 1 200px; min-width:0;">✏️ Editing draft: <strong id="bcEditingDraftLabel"></strong></span>
+          <button type="button" id="bcExitDraftBtn" style="flex-shrink:0; border:1px solid #C99A3B; background:#fff; color:#7A5C00; border-radius:6px; padding:5px 10px; font-size:12px; cursor:pointer;">✕ New Message</button>
+        </div>
         <label for="broadcastSubject">Subject</label>
         <input type="text" id="broadcastSubject" placeholder="e.g. A quick update from your advisor">
 
@@ -2361,6 +2798,22 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
         <div class="status" id="sendHourStatus"></div>
       </div>
 
+      <div class="card" id="advanceDaysCard" style="display:none;">
+        <h2>Advance Due Reminder</h2>
+        <p class="sub">How many days before a premium is actually due should Client Pulse start sending heads-up reminders. The reminder on the actual due date always still goes out regardless of this setting.</p>
+        <label for="advanceDaysSelect">Start reminding</label>
+        <select id="advanceDaysSelect">
+          <option value="1">1 day before (default)</option>
+          <option value="2">2 days before</option>
+          <option value="3">3 days before</option>
+          <option value="4">4 days before</option>
+          <option value="5">5 days before</option>
+          <option value="6">6 days before</option>
+          <option value="7">7 days before</option>
+        </select>
+        <div class="status" id="advanceDaysStatus"></div>
+      </div>
+
       <div class="card" id="setupGuideCard" style="text-align:center;">
         <a href="https://jccbusinesssolutions.github.io/CLIENT-PULSE-SETUP-GUIDE/" style="display:inline-block;font-weight:700;color:#0C447C;text-decoration:underline;">CLIENT PULSE SETUP GUIDE</a>
       </div>
@@ -2672,6 +3125,9 @@ function showPage(pageName){
   }
   if (pageName === 'broadcast' && typeof refreshDraftsList === 'function'){
     refreshDraftsList();
+  }
+  if (pageName === 'broadcast' && typeof updateQuotaBox === 'function'){
+    updateQuotaBox();
   }
 }
 
@@ -3278,8 +3734,16 @@ async function callBackend(payload){
   if (!url) throw new Error('NO_SCRIPT_URL');
   console.log('[callBackend] action:', payload.action, '| URL:', url.slice(0, 80) + '...');
   const bodyStr = JSON.stringify(payload);
+  // Routed through the same Cloudflare Worker proxy pushRowsInBatches
+  // already uses — this function used to POST directly to Apps Script,
+  // which meant every action here (saving drafts, branding, schedules,
+  // preferences, images — everything except pushes) was still exposed
+  // to the exact same CORS/redirect-drops-the-body failure we already
+  // diagnosed and fixed for dues/birthday pushes. It had just been
+  // getting away with it on smaller payloads until now.
+  const proxyUrl = CORS_PROXY_URL + '?target=' + encodeURIComponent(url);
   try{
-    const res = await fetch(url, {
+    const res = await fetch(proxyUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: bodyStr
@@ -3533,6 +3997,21 @@ function populateSendHour(hour){
   el('sendHourSelect').value = String(hour);
 }
 
+async function fetchAdvanceDays(){
+  const url = getScriptUrl();
+  if (!url) return null;
+  try{
+    const res = await fetch(url + '?action=getAdvanceDays');
+    const data = await res.json();
+    return (data && data.advanceDays !== undefined) ? data.advanceDays : null;
+  }catch(e){ return null; }
+}
+
+function populateAdvanceDays(days){
+  if (days === null || days === undefined) return;
+  el('advanceDaysSelect').value = String(days);
+}
+
 async function fetchSavedPassword(){
   const url = getScriptUrl();
   if (!url) return '';
@@ -3586,7 +4065,7 @@ function hideStatus(id){ el(id).className = 'status'; }
 // everything instead of showing it — the Setup button appeared to do
 // nothing. This is now explicit and always shows, no guessing.
 function showSettingsCards(){
-  ['configCard','brandingCard','sendHourCard','headerFooterStudioCard','duesPreviewCard',
+  ['configCard','brandingCard','sendHourCard','advanceDaysCard','headerFooterStudioCard','duesPreviewCard',
    'duesTestEmailCard','birthdayPreviewCard','birthdayTestEmailCard',
    'anniversaryPreviewCard','anniversaryTestEmailCard','personalLinkCard'
   ].forEach(id => {
@@ -3646,6 +4125,7 @@ el('saveScriptUrl').addEventListener('click', async () => {
   showStatus('configStatus','success','Saved \u2014 this browser will remember it next time you open the app.');
   fetchBrandConfig().then(config => populateBrandingFields(config));
   fetchSendHour().then(hour => populateSendHour(hour));
+  fetchAdvanceDays().then(days => populateAdvanceDays(days));
   loadDueToday();
   loadDailyStats();
   refreshPersonalLink();
@@ -4827,6 +5307,10 @@ async function refreshScheduledBroadcastsList(){
       completedContainer.innerHTML = '<div style="font-size:13px; color:#9CA3AF;">No completed broadcasts yet.</div>';
     } else {
       completed.sort((a, b) => new Date(b.sentAt || b.createdAt) - new Date(a.sentAt || a.createdAt));
+      // Kept so the Edit & Resend button below can look up the full
+      // payload (subject, body, attachments, recipients) for whichever
+      // scheduleId gets clicked, without a second round trip.
+      bcCompletedSchedules = completed;
       completedContainer.innerHTML = completed.slice(0, 20).map(s => {
         const when = s.sentAt ? new Date(s.sentAt).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true }) : '\u2014';
         const hasFailures = s.failedCount > 0;
@@ -4834,6 +5318,11 @@ async function refreshScheduledBroadcastsList(){
           ? '<span style="color:var(--bad,#EB5757); font-weight:700;">' + s.sentCount + ' sent, ' + s.failedCount + ' failed</span>'
           : '<span style="color:var(--good,#27AE60); font-weight:700;">' + s.sentCount + ' sent</span>';
         const errorLine = s.error ? '<div style="font-size:11px; color:#9CA3AF; margin-top:4px; word-break:break-word;">' + escapeHtml(s.error.length > 150 ? s.error.substring(0, 150) + '\u2026' : s.error) + '</div>' : '';
+        // Only offered when something actually failed — a fully successful
+        // broadcast has nothing left to resend to.
+        const resendBtn = hasFailures
+          ? '<button type="button" class="bc-resend-btn" data-resend-id="' + escapeHtml(s.scheduleId) + '" style="margin-top:8px; border:1px solid #C99A3B; background:#fff; color:#7A5C00; border-radius:6px; padding:6px 12px; font-size:12px; cursor:pointer;">\u21ba EDIT &amp; RESEND</button>'
+          : '';
         // Swipe-to-delete: bc-swipe-wrap clips a red delete action behind
         // the row, which bc-completed-row slides left to reveal via
         // touch/drag — see wireSwipeToDelete() for the gesture handling.
@@ -4843,10 +5332,18 @@ async function refreshScheduledBroadcastsList(){
           + '<strong>' + escapeHtml(s.subject || '(no subject)') + '</strong><br>'
           + '<span style="color:#9CA3AF;">' + when + '</span> \u2014 ' + resultLine
           + errorLine
+          + resendBtn
           + '</div>'
           + '</div>';
       }).join('');
       wireSwipeToDelete(completedContainer);
+      completedContainer.querySelectorAll('.bc-resend-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const schedule = bcCompletedSchedules.find(s => s.scheduleId === btn.dataset.resendId);
+          if (schedule) loadScheduleIntoEditor(schedule);
+        });
+      });
     }
   }catch(err){
     container.innerHTML = '<div style="font-size:13px; color:#9CA3AF;">Could not load scheduled broadcasts.</div>';
@@ -4946,6 +5443,8 @@ function wireSwipeToDelete(container){
    starting point.
    ============================================================ */
 let bcEditingDraftId = null;
+let bcCompletedSchedules = []; // holds the last-fetched completed-broadcasts list so Edit & Resend can look up a full payload by scheduleId
+let bcResendingFromScheduleId = null; // set while composing via "Edit & Resend" — used to annotate the original schedule row once the resend actually completes
 
 el('bcSaveDraftBtn').addEventListener('click', async () => {
   const subject = el('broadcastSubject').value.trim();
@@ -4971,6 +5470,12 @@ el('bcSaveDraftBtn').addEventListener('click', async () => {
       throw new Error(result.error || 'Unknown error from server');
     }
     bcEditingDraftId = result.draftId; // subsequent saves update this same draft
+    // Whether this was a brand-new save or an update to one already
+    // loaded, the composer is now attached to this draftId — reflect
+    // that in the banner so it stays an accurate signal either way.
+    el('bcEditingDraftBanner').style.display = 'flex';
+    el('bcEditingDraftLabel').textContent = subject || '(no subject)';
+    el('bcSaveDraftBtn').textContent = 'UPDATE THIS DRAFT';
     showStatus('broadcastStatus','success','Draft saved.');
     await refreshDraftsList();
   }catch(err){
@@ -5010,7 +5515,11 @@ async function refreshDraftsList(){
         btn.textContent = '...';
         try{
           await callBackend({ action: 'deleteDraft', draftId: btn.dataset.deleteDraft });
-          if (bcEditingDraftId === btn.dataset.deleteDraft) bcEditingDraftId = null;
+          if (bcEditingDraftId === btn.dataset.deleteDraft){
+            bcEditingDraftId = null;
+            el('bcEditingDraftBanner').style.display = 'none';
+            el('bcSaveDraftBtn').textContent = 'SAVE AS DRAFT';
+          }
           await refreshDraftsList();
         }catch(err){
           showStatus('broadcastStatus','error','Could not delete draft: ' + err.message);
@@ -5024,6 +5533,7 @@ async function refreshDraftsList(){
 
 async function loadDraftIntoEditor(draft){
   bcEditingDraftId = draft.draftId;
+  bcResendingFromScheduleId = null; // switching to a draft leaves any resend context behind
   const payload = draft.payload || {};
   el('broadcastSubject').value = payload.subject || '';
   el('broadcastEditor').innerHTML = payload.htmlBody || '';
@@ -5031,6 +5541,16 @@ async function loadDraftIntoEditor(draft){
   renderBcAttachmentList();
   bcUseTemplate = !!payload.useTemplate;
   el('bcTemplateToggle').querySelector('.theme-switch-track').classList.toggle('is-on', bcUseTemplate);
+
+  // Makes it unmistakable which draft (if any) is currently loaded, and
+  // gives a direct way out of that state — previously there was no
+  // visual signal at all that you were "inside" a draft, which made it
+  // easy to lose track of whether Save As Draft would update this one
+  // or you'd drifted into composing something unrelated while it was
+  // still silently attached.
+  el('bcEditingDraftBanner').style.display = 'flex';
+  el('bcEditingDraftLabel').textContent = payload.subject || '(no subject)';
+  el('bcSaveDraftBtn').textContent = 'UPDATE THIS DRAFT';
 
   // A saved draft's recipient list can go stale — if this exact subject
   // has since actually been sent (to some or all of them, via another
@@ -5070,6 +5590,78 @@ async function loadDraftIntoEditor(draft){
   // reading that lets an oversized saved draft pass the pre-send size check.
   updateSizeIndicator();
 }
+
+// Clears the composer back to a genuinely blank state and detaches from
+// whatever draft was loaded — previously the only way to do this was to
+// close and reopen the entire app, since bcEditingDraftId had no reset
+// path at all once a draft was loaded.
+// Reloads a completed (partially or fully failed) scheduled broadcast
+// back into the composer so it can be reviewed and resent, instead of
+// the advisor having to rebuild the message and recipient list from
+// scratch. Deliberately mirrors loadDraftIntoEditor's already-sent
+// filtering exactly — the Broadcast Log already knows who actually
+// received this exact subject, so the recipients who succeeded the
+// first time (the sentCount portion) get automatically excluded here,
+// leaving only the ones who need it resent selected by default.
+async function loadScheduleIntoEditor(schedule){
+  bcEditingDraftId = null; // this is a resend, not an existing draft — Save As Draft here creates a new one
+  bcResendingFromScheduleId = schedule.scheduleId; // annotated back once this resend actually completes
+  el('bcEditingDraftBanner').style.display = 'none';
+  el('bcSaveDraftBtn').textContent = 'SAVE AS DRAFT';
+
+  const payload = schedule.payload || {};
+  el('broadcastSubject').value = payload.subject || '';
+  el('broadcastEditor').innerHTML = payload.htmlBody || '';
+  bcAttachments = payload.attachments || [];
+  renderBcAttachmentList();
+  bcUseTemplate = !!payload.useTemplate;
+  el('bcTemplateToggle').querySelector('.theme-switch-track').classList.toggle('is-on', bcUseTemplate);
+
+  await refreshAlreadySentForCurrentSubject();
+  const rows = payload.rows || [];
+  const alreadySentRows = rows.filter(r => bcAlreadySentEmails.has((r.email || '').trim().toLowerCase()));
+  const eligibleRows = rows.filter(r => !bcAlreadySentEmails.has((r.email || '').trim().toLowerCase()));
+
+  bcAllClients = deduplicateClientsByEmail(rows.map(r => ({ email: r.email, clientName: r.clientName })));
+  bcSelectedEmails = new Set(eligibleRows.map(r => r.email));
+
+  const n = bcSelectedEmails.size;
+  const excludedNote = alreadySentRows.length > 0
+    ? ' (' + alreadySentRows.length + ' already received this subject and ' + (alreadySentRows.length === 1 ? 'was' : 'were') + ' excluded)'
+    : '';
+  el('bcRecipientSummaryText').textContent = n === 0
+    ? 'No recipients selected yet' + excludedNote
+    : n + ' recipient' + (n === 1 ? '' : 's') + ' selected \u2014 ready to resend' + excludedNote;
+  el('bcSendNowBtn').click();
+  el('bcSendBtn').textContent = 'SEND BROADCAST';
+  showStatus('broadcastStatus', 'info',
+    'Loaded for resend \u2014 ' + n + ' recipient' + (n === 1 ? '' : 's') + ' who haven\u2019t received this yet' + excludedNote + '. Review, then send, schedule, or save as a draft.'
+  );
+  el('broadcastCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  updateSizeIndicator();
+}
+
+function resetComposeToNewMessage(){
+  bcEditingDraftId = null;
+  bcResendingFromScheduleId = null;
+  el('bcEditingDraftBanner').style.display = 'none';
+  el('bcSaveDraftBtn').textContent = 'SAVE AS DRAFT';
+  el('broadcastSubject').value = '';
+  el('broadcastEditor').innerHTML = '';
+  bcAttachments = [];
+  renderBcAttachmentList();
+  bcUseTemplate = false;
+  el('bcTemplateToggle').querySelector('.theme-switch-track').classList.toggle('is-on', false);
+  bcAllClients = [];
+  bcSelectedEmails = new Set();
+  el('bcRecipientSummaryText').textContent = 'No recipients selected yet';
+  hideStatus('broadcastStatus');
+  updateSizeIndicator();
+}
+
+el('bcExitDraftBtn').addEventListener('click', () => {
+  resetComposeToNewMessage();
+});
 
 /* ============================================================
    HEADER/FOOTER TEMPLATE — reuses the exact header and footer
@@ -5604,6 +6196,21 @@ async function runBroadcastSend(recipients, subject, body, useTemplate, resumeFr
       } else {
         showStatus('broadcastStatus', totalFailed > 0 ? 'error' : 'success', msg);
         bcResumableSend = null; // fully accounted for — nothing left to resume
+        // If this send was an "Edit & Resend" of a previously-failed
+        // schedule, and it's now genuinely finished (not stopped, not
+        // still waiting on quota to reset), leave a note on that
+        // ORIGINAL row saying these recipients were successfully
+        // followed up on — without touching its original sent/failed
+        // counts, which stay as an accurate record of that attempt.
+        if (bcResendingFromScheduleId){
+          callBackend({
+            action: 'annotateResendOnSchedule',
+            scheduleId: bcResendingFromScheduleId,
+            sentCount: totalSent,
+            failedCount: totalFailed
+          }).catch(e => { /* annotation failing shouldn't surface as if the resend itself failed */ });
+          bcResendingFromScheduleId = null; // one-time annotation per resend
+        }
       }
     }
   }catch(err){
@@ -5638,6 +6245,13 @@ async function runBroadcastSend(recipients, subject, body, useTemplate, resumeFr
     el('bcSendBtn').disabled = false;
     el('bcPreviewBtn').disabled = false;
     el('bcStopSendBtn').style.display = 'none';
+    // Sending consumes the same quota the box up top is showing — refresh
+    // it now so the number doesn't sit stale for the rest of the session.
+    updateQuotaBox();
+    // Picks up the resend annotation on the original schedule row (if
+    // this send was one), so it's visible immediately without the
+    // advisor having to manually hit refresh on that list separately.
+    if (typeof refreshScheduledBroadcastsList === 'function') refreshScheduledBroadcastsList();
   }
 }
 
@@ -5695,6 +6309,16 @@ el('sendHourSelect').addEventListener('change', async () => {
     showStatus('sendHourStatus','success','Saved \u2014 dues reminders and birthday greetings will now send during this window.');
   }catch(e){
     showStatus('sendHourStatus','error','Could not save (check the Setup URL above). ' + e.message);
+  }
+});
+
+el('advanceDaysSelect').addEventListener('change', async () => {
+  const days = el('advanceDaysSelect').value;
+  try{
+    await callBackend({ action:'setAdvanceDays', days: days });
+    showStatus('advanceDaysStatus','success','Saved \u2014 dues reminders will now start this many days before each due date.');
+  }catch(e){
+    showStatus('advanceDaysStatus','error','Could not save (check the Setup URL above). ' + e.message);
   }
 });
 
@@ -5851,12 +6475,31 @@ function formatClientNameJS(rawName){
 
 // Mirrors buildReminderEmailHtml() in the Apps Script backend, using
 // sample data plus whatever the advisor has entered/uploaded so far.
-function buildPreviewEmailHtml(headerSrc, footerSrc){
+function buildPreviewEmailHtml(headerSrc, footerSrc, daysAhead){
+  daysAhead = daysAhead || 0;
   const connectLink = el('brandConnectLink').value.trim() || '#';
   const payLink = el('brandPayLink').value.trim() || '#';
   const greetingName = formatClientNameJS('Dela Cruz, Juan Miguel');
   const formattedAmount = 'PHP ' + (50000).toLocaleString('en-PH', {minimumFractionDigits:2});
-  const formattedDate = new Date().toLocaleDateString('en-US', {month:'long', day:'numeric', year:'numeric'});
+  const sampleDueDate = new Date();
+  sampleDueDate.setDate(sampleDueDate.getDate() + daysAhead);
+  const formattedDate = sampleDueDate.toLocaleDateString('en-US', {month:'long', day:'numeric', year:'numeric'});
+
+  // Mirrors the daysAhead-adaptive copy in Code.gs's buildReminderEmailHtml
+  // exactly, so this in-app preview shows the same wording a real advance
+  // reminder would actually send, instead of always showing the "due
+  // today" version regardless of the configured Advance Due Reminder setting.
+  let openingLine;
+  if (daysAhead === 0){
+    openingLine = 'This is a friendly reminder that your premium payment is due <strong>today</strong>.';
+  } else if (daysAhead === 1){
+    openingLine = 'This is a friendly reminder that your premium payment is due <strong>tomorrow, ' + formattedDate + '</strong>.';
+  } else {
+    openingLine = 'This is a friendly reminder that your premium payment is due in <strong>' + daysAhead + ' days, on ' + formattedDate + '</strong>.';
+  }
+  const closingLine = daysAhead === 0
+    ? 'Please settle this at your earliest convenience to keep your policy in force. If you have already made this payment, kindly disregard this reminder.'
+    : 'Please prepare your payment in advance to keep your policy in force. If you have already made this payment, kindly disregard this reminder.';
 
   const headerHtml = headerSrc
     ? '<img src="' + headerSrc + '" alt="Header" style="width:100%;display:block;">'
@@ -5870,14 +6513,14 @@ function buildPreviewEmailHtml(headerSrc, footerSrc){
     + headerHtml
     + '  <div style="padding:24px;background:#FDF8F0;color:#1C2A38;">'
     + '    <p>Hi ' + greetingName + ',</p>'
-    + '    <p>This is a friendly reminder that your premium payment is due <strong>today</strong>.</p>'
+    + '    <p>' + openingLine + '</p>'
     + '    <table style="width:100%;margin:16px 0;border-collapse:collapse;font-size:14px;">'
     + '      <tr><td style="padding:8px 0;color:#6B7280;">Policy Number</td><td style="text-align:right;font-weight:700;">0123456789</td></tr>'
     + '      <tr><td style="padding:8px 0;color:#6B7280;">Product</td><td style="text-align:right;font-weight:700;">Sample Insurance Plan</td></tr>'
     + '      <tr><td style="padding:8px 0;color:#6B7280;">Amount Due</td><td style="text-align:right;font-weight:700;color:#0C447C;">' + formattedAmount + '</td></tr>'
     + '      <tr><td style="padding:8px 0;color:#6B7280;">Due Date</td><td style="text-align:right;font-weight:700;">' + formattedDate + '</td></tr>'
     + '    </table>'
-    + '    <p>Please settle this at your earliest convenience to keep your policy in force. If you have already made this payment, kindly disregard this reminder.</p>'
+    + '    <p>' + closingLine + '</p>'
     + '    <div style="text-align:center;margin:22px 0;">'
     + '      <a href="' + payLink + '" style="display:inline-block;background:#0C447C;color:#FFFFFF;text-decoration:none;padding:14px 30px;border-radius:8px;font-weight:700;font-size:14px;letter-spacing:.5px;">PAY ONLINE NOW</a>'
     + '    </div>'
@@ -5895,16 +6538,21 @@ el('previewEmailBtn').addEventListener('click', async () => {
   el('previewEmailBtn').disabled = true;
   el('previewEmailBtn').textContent = 'LOADING\u2026';
   try{
-    const [headerSrc, footerSrc] = await Promise.all([
+    const [headerSrc, footerSrc, advanceDays] = await Promise.all([
       ensurePreviewImage('header'),
-      ensurePreviewImage('footer')
+      ensurePreviewImage('footer'),
+      fetchAdvanceDays()
     ]);
+    const daysAhead = advanceDays || 0;
     const senderName = el('brandSenderName').value.trim() || '(sender name not set)';
-    const subjectDate = new Date().toLocaleDateString('en-US', {month:'long', day:'numeric'}).toUpperCase();
+    const sampleDueDate = new Date();
+    sampleDueDate.setDate(sampleDueDate.getDate() + daysAhead);
+    const subjectDate = sampleDueDate.toLocaleDateString('en-US', {month:'long', day:'numeric'}).toUpperCase();
+    const daysLabel = daysAhead === 0 ? '' : (daysAhead === 1 ? ' IN 1 DAY' : ' IN ' + daysAhead + ' DAYS');
     el('previewMeta').innerHTML =
       'From: ' + senderName + '<br>' +
-      'Subject: PREMIUM DUE REMINDER - ' + subjectDate;
-    el('previewEmailBody').innerHTML = buildPreviewEmailHtml(headerSrc, footerSrc);
+      'Subject: PREMIUM DUE REMINDER' + daysLabel + ' - ' + subjectDate;
+    el('previewEmailBody').innerHTML = buildPreviewEmailHtml(headerSrc, footerSrc, daysAhead);
     el('emailPreviewContainer').style.display = 'block';
   }finally{
     el('previewEmailBtn').disabled = false;
@@ -6022,6 +6670,32 @@ async function fetchRemainingEmailQuota(){
   }
 }
 
+// Persistent quota box at the top of the Broadcast Email page — this is
+// the same MailApp.getRemainingDailyQuota() number already used as a
+// pre-send warning, just surfaced proactively so it's visible before
+// composing anything, not only reactively at the moment of sending.
+// The same quota is also consumed by dues reminders, birthday greetings,
+// and anniversary greetings, so this number can be lower than expected
+// on a day those have already sent a lot of email — the note below the
+// count says so, rather than implying broadcast is the only thing using it.
+async function updateQuotaBox(){
+  const box = el('bcQuotaBox');
+  const textEl = el('bcQuotaBoxText');
+  if (!box || !textEl) return;
+  textEl.textContent = 'Checking today\u2019s remaining email quota\u2026';
+  const remaining = await fetchRemainingEmailQuota();
+  if (remaining === null){
+    textEl.textContent = 'Could not check today\u2019s remaining email quota right now.';
+    return;
+  }
+  const low = remaining <= 10;
+  box.style.background = low ? '#FEF2F2' : '#EFF6FF';
+  box.style.borderColor = low ? '#FECACA' : '#BFDBFE';
+  box.style.color = low ? '#7A1F1F' : '#1E3A5F';
+  textEl.innerHTML = '<strong>' + remaining + '</strong> email' + (remaining === 1 ? '' : 's') + ' remaining in today\u2019s sending quota'
+    + '<div style="font-size:11.5px; opacity:.8; margin-top:2px;">Shared across broadcasts, dues reminders, birthday and anniversary greetings \u2014 personal Gmail accounts get 100/day, Google Workspace accounts up to 1,500/day. Resets at midnight Pacific Time.</div>';
+}
+
 function escapeHtml(str){
   return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
@@ -6094,16 +6768,31 @@ async function loadDueToday(){
       return;
     }
     if (rows.length === 0){
-      sub.textContent = 'Nothing due today.';
+      sub.textContent = 'Nothing due today or coming up for an advance reminder.';
       list.innerHTML = '<div class="due-empty">All clear — check back tomorrow.</div>';
       return;
     }
-    sub.textContent = rows.length + ' polic' + (rows.length===1?'y':'ies') + ' due today:';
+    // Split the combined list back into counts for the summary line —
+    // daysAhead === 0 means due today, anything else is the single
+    // advance-notice touchpoint (whatever Advance Days is set to).
+    const dueTodayCount = rows.filter(r => r.daysAhead === 0).length;
+    const advanceCount = rows.length - dueTodayCount;
+    const summaryParts = [];
+    if (dueTodayCount > 0) summaryParts.push(dueTodayCount + ' due today');
+    if (advanceCount > 0) summaryParts.push(advanceCount + ' coming up for an advance reminder');
+    sub.textContent = summaryParts.join(', ') + ':';
     list.innerHTML = rows.map(r => {
       const amt = 'PHP ' + Number(r.premiumAmount||0).toLocaleString('en-PH', {minimumFractionDigits:2});
       const sentBadge = r.lastReminderSent ? '<div class="sent-badge">EMAIL REMINDER SENT</div>' : '';
+      // Distinguishes the two touchpoints at a glance — previously this
+      // list only ever showed due-today items, so there was no visual
+      // difference needed; now that advance-day items appear alongside
+      // them, each row needs to say plainly which kind it is.
+      const timingBadge = r.daysAhead === 0
+        ? '<span style="display:inline-block;background:#0C447C;color:#fff;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:10px;margin-left:8px;vertical-align:middle;">DUE TODAY</span>'
+        : '<span style="display:inline-block;background:#C99A3B;color:#fff;font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:10px;margin-left:8px;vertical-align:middle;">ADVANCE \u00b7 ' + r.daysAhead + (r.daysAhead === 1 ? ' DAY' : ' DAYS') + '</span>';
       return '<div class="due-item">'
-        + '<div class="due-field"><span class="label">NAME</span><span class="value">' + escapeHtml(r.clientName) + '</span></div>'
+        + '<div class="due-field"><span class="label">NAME</span><span class="value">' + escapeHtml(r.clientName) + timingBadge + '</span></div>'
         + '<div class="due-field"><span class="label">POLICY NUMBER</span><span class="value">' + escapeHtml(r.policyNumber) + '</span></div>'
         + '<div class="due-field"><span class="label">PLAN NAME</span><span class="value">' + escapeHtml(r.product) + '</span></div>'
         + '<div class="due-field"><span class="label">DUE DATE</span><span class="value">' + escapeHtml(r.dueDateFormatted) + '</span></div>'
@@ -6175,6 +6864,7 @@ loadDueToday();
 loadDailyStats();
 fetchBrandConfig().then(config => populateBrandingFields(config));
 fetchSendHour().then(hour => populateSendHour(hour));
+  fetchAdvanceDays().then(days => populateAdvanceDays(days));
 refreshPersonalLink();
 
 </script>
@@ -7164,6 +7854,23 @@ async function fetchAccessList() {
   }
 }
 
+// Lightweight replacement for fetchAccessList() + a manual liveAccessList
+// lookup — hits the new cache-backed checksession endpoint instead of
+// downloading every buyer's row just to check ONE person's session.
+// Used both to restore an existing session on app open and by the
+// 30-second polling watch, both of which previously re-fetched the
+// entire buyer list on every single check.
+async function checkSessionFast(email, token) {
+  try {
+    const url = CLIENT_PULSE_SHEET_API + '?action=checksession&email=' + encodeURIComponent(email) + '&token=' + encodeURIComponent(token);
+    const res = await fetch(url);
+    const data = await res.json();
+    return data || null; // full response object now — callers read .valid and .daysUntilExpiration as needed
+  } catch (e) {
+    return null; // network failure — caller decides how to treat "unknown" vs "definitely invalid"
+  }
+}
+
 function isPaidEmail(email) {
   const emailLower = String(email).trim().toLowerCase();
   if (liveAccessList.some(row => row.email === emailLower && row.status === 'PAID')) {
@@ -7182,24 +7889,81 @@ function isValidEmail(email) {
 // Check if user is already logged in (sessionStorage) AND that session
 // is still the current one on the server — handles the case where the
 // account was logged into elsewhere while this tab/device was closed.
-function checkAuth() {
+// Previously this depended on liveAccessList already being fully
+// loaded (the entire buyer list) before it could decide anything —
+// now it's a single cached lookup for just this one email, so the app
+// doesn't have to wait on everyone else's data just to restore this
+// one person's session.
+async function checkAuthFast() {
   const storedEmail = sessionStorage.getItem('clientPulseAuth');
   const storedToken = sessionStorage.getItem('clientPulseSessionToken');
   if (storedEmail && isValidEmail(storedEmail) && storedToken) {
-    const row = liveAccessList.find(r => r.email === storedEmail);
-    if (row && row.sessionToken === storedToken) {
+    const result = await checkSessionFast(storedEmail, storedToken);
+    if (result && result.valid === true) {
       currentEmail = storedEmail;
       currentSessionToken = storedToken;
       hideGate();
       startSessionWatch();
+      maybeShowExpirationNotice(result.daysUntilExpiration);
       return true;
     }
-    // Stale or superseded session — clear it and fall through to the gate
-    sessionStorage.removeItem('clientPulseAuth');
-    sessionStorage.removeItem('clientPulseSessionToken');
+    if (result && result.valid === false) {
+      // Definitively stale or superseded — clear it and fall through to the gate.
+      sessionStorage.removeItem('clientPulseAuth');
+      sessionStorage.removeItem('clientPulseSessionToken');
+    }
+    // result === null (network failure): deliberately leaves the stored
+    // session untouched rather than logging someone out over a
+    // transient connection blip — the next 30-second poll will get
+    // another chance to confirm one way or the other.
   }
   return false;
 }
+
+// Shows a dismissible renewal notice when the subscription is within
+// 30 days of its Expiration date (or already past it) — unlike the
+// inactivity lock screen, this never blocks the dashboard, and only
+// shows once per browser session (not on every 30-second poll) so it
+// doesn't nag repeatedly during a single sitting.
+function maybeShowExpirationNotice(daysUntilExpiration) {
+  if (daysUntilExpiration === null || daysUntilExpiration === undefined) return; // no Expiration date on file at all
+  if (daysUntilExpiration > 30) return; // not close enough yet
+  if (sessionStorage.getItem('cpExpirationNoticeDismissed') === 'true') return;
+
+  const icon = document.getElementById('expirationNoticeIcon');
+  const title = document.getElementById('expirationNoticeTitle');
+  const message = document.getElementById('expirationNoticeMessage');
+
+  if (daysUntilExpiration < 0) {
+    const daysAgo = Math.abs(daysUntilExpiration);
+    icon.textContent = '⚠️';
+    title.textContent = 'Subscription Expired';
+    message.textContent = 'Your Client Pulse subscription expired ' + daysAgo + ' day' + (daysAgo === 1 ? '' : 's') + ' ago. Please renew to keep your reminders sending without interruption.';
+  } else if (daysUntilExpiration === 0) {
+    icon.textContent = '⏳';
+    title.textContent = 'Subscription Expires Today';
+    message.textContent = 'Your Client Pulse subscription expires today. Renew now to avoid any interruption to your reminders.';
+  } else {
+    icon.textContent = '⏳';
+    title.textContent = 'Subscription Renewal';
+    message.textContent = 'Your Client Pulse subscription expires in ' + daysUntilExpiration + ' day' + (daysUntilExpiration === 1 ? '' : 's') + '. Please renew soon to keep everything running smoothly.';
+  }
+
+  document.getElementById('expirationNoticeOverlay').style.display = 'flex';
+}
+
+function closeExpirationNotice() {
+  document.getElementById('expirationNoticeOverlay').style.display = 'none';
+  sessionStorage.setItem('cpExpirationNoticeDismissed', 'true');
+}
+
+const JCC_PAYMENT_URL = 'https://jccbusinesssolutions.github.io/JCCPAYMENTS/';
+
+function renewSubscriptionClicked() {
+  window.open(JCC_PAYMENT_URL, '_blank', 'noopener');
+  closeExpirationNotice(); // same dismiss behavior as the X — don't re-nag for the rest of this session once they've headed to pay
+}
+
 
 // Tracks which email is currently mid-flow (setup / forgot / reset),
 // so each step's submit function knows who it's acting on without
@@ -7243,10 +8007,124 @@ function clearAllGateErrors() {
 }
 
 function hideAllGateSteps() {
-  ['emailStep','setupPasswordStep','forgotPasswordStep','resetPasswordStep'].forEach(id => {
+  ['emailStep','setupPasswordStep','forgotPasswordStep','resetPasswordStep','policyAgreementStep'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
+}
+
+// ============================================================
+// POLICY AGREEMENT GATE
+// ------------------------------------------------------------
+// Shown whenever the backend's login/setpassword/resetpassword
+// response is {status:'AGREEMENT_REQUIRED', token, agreementVersion,
+// agreementEffectiveDate}. A session token has ALREADY been issued at
+// this point (same as a normal successful login) — this step is a
+// hard block on reaching the dashboard, not a second credential
+// check, so pendingAgreementEmail/Token/Version below are all that's
+// needed to complete it.
+// ============================================================
+let pendingAgreementEmail = '';
+let pendingAgreementToken = '';
+let pendingAgreementVersion = '';
+
+function showPolicyAgreementStep(email, token, agreementVersion, agreementEffectiveDate) {
+  pendingAgreementEmail = email;
+  pendingAgreementToken = token;
+  pendingAgreementVersion = agreementVersion;
+  clearAllGateErrors();
+  hideAllGateSteps();
+  document.getElementById('paVersionLabel').textContent = agreementVersion || '—';
+  document.getElementById('paEffectiveDateLabel').textContent = agreementEffectiveDate || '—';
+  const checkbox = document.getElementById('policyAgreementCheckbox');
+  checkbox.checked = false;
+  checkbox.disabled = true;
+  document.getElementById('policyAgreementScrollHint').style.display = '';
+  document.getElementById('policyAgreementScrollBox').scrollTop = 0;
+  document.getElementById('policyAgreementStep').style.display = '';
+  // In case the box is short enough that it never actually needs
+  // scrolling (small screen zoom, huge font override, etc.), check
+  // once immediately after layout rather than requiring a scroll
+  // event that may never fire.
+  setTimeout(_checkPolicyAgreementScrolled, 50);
+}
+
+// Unlocks the acceptance checkbox only once the Advisor has scrolled
+// the full policy text to its bottom — a genuine "they had the chance
+// to read it" gate, not just a checkbox that's clickable from the
+// instant the modal opens. The 4px tolerance accounts for sub-pixel
+// scroll rounding in different browsers.
+function _checkPolicyAgreementScrolled() {
+  const box = document.getElementById('policyAgreementScrollBox');
+  if (!box) return;
+  const reachedBottom = box.scrollTop + box.clientHeight >= box.scrollHeight - 4;
+  const checkbox = document.getElementById('policyAgreementCheckbox');
+  const hint = document.getElementById('policyAgreementScrollHint');
+  if (reachedBottom) {
+    checkbox.disabled = false;
+    hint.style.display = 'none';
+  }
+}
+
+// Completes login exactly like a normal successful gate pass — same
+// sessionStorage writes, same hideGate()/startSessionWatch() sequence
+// used by accessGate's PAID path, submitSetupPassword's PAID path, and
+// submitResetPassword's ok path.
+function finalizeLoginSuccess(email, token, daysUntilExpiration) {
+  currentEmail = email.toLowerCase();
+  currentSessionToken = token;
+  sessionStorage.setItem('clientPulseAuth', currentEmail);
+  sessionStorage.setItem('clientPulseSessionToken', currentSessionToken);
+  hideGate();
+  startSessionWatch();
+  if (typeof daysUntilExpiration !== 'undefined') maybeShowExpirationNotice(daysUntilExpiration);
+}
+
+async function submitPolicyAgreement() {
+  const errEl = document.getElementById('policyAgreementError');
+  errEl.textContent = '';
+
+  if (!document.getElementById('policyAgreementCheckbox').checked || document.getElementById('policyAgreementCheckbox').disabled) {
+    errEl.textContent = 'Please scroll through and check the box confirming you have read and agree to the Policy Agreement.';
+    return;
+  }
+
+  const btn = document.getElementById('policyAgreementBtn');
+  btn.disabled = true;
+  btn.textContent = 'SAVING...';
+
+  try {
+    const res = await fetch(CLIENT_PULSE_SHEET_API, {
+      method: 'POST',
+      body: JSON.stringify({
+        action: 'acceptPolicyAgreement',
+        email: pendingAgreementEmail,
+        token: pendingAgreementToken,
+        agreementVersion: pendingAgreementVersion
+      })
+    });
+    const data = await res.json();
+
+    if (data && data.status === 'PAID' && data.token) {
+      finalizeLoginSuccess(pendingAgreementEmail, data.token, data.daysUntilExpiration);
+    } else if (data && data.status === 'VERSION_CHANGED') {
+      // The admin bumped the version while this modal was open — reload
+      // with the new version/date rather than silently record acceptance
+      // of a now-outdated one.
+      errEl.textContent = 'The Policy Agreement was just updated. Please review the new version below.';
+      showPolicyAgreementStep(pendingAgreementEmail, pendingAgreementToken, data.agreementVersion, data.agreementEffectiveDate);
+    } else if (data && data.status === 'DENIED') {
+      errEl.textContent = (data && data.message) || 'Your session has expired. Please log in again.';
+      setTimeout(showEmailStep, 1800);
+    } else {
+      errEl.textContent = (data && data.message) || 'Could not save your acceptance. Please try again.';
+    }
+  } catch (e) {
+    errEl.textContent = 'Could not save your acceptance right now. Please try again.';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'ACCEPT & CONTINUE';
+  }
 }
 
 function showEmailStep() {
@@ -7289,11 +8167,13 @@ async function accessGate() {
     return;
   }
 
-  if (!isPaidEmail(email)) {
-    emailError.textContent = 'This email does not have access. Please check and try again.';
-    return;
-  }
-
+  // The isPaidEmail() pre-check that used to live here has been removed —
+  // it depended on the full buyer list already being loaded client-side
+  // (a real cost on every app open) purely to show the exact same "This
+  // email does not have access" message the backend's DENIED response
+  // already produces below. The backend is the actual authority on this
+  // either way, so this was a redundant local check adding a dependency
+  // without adding any real coverage.
   const btn = document.getElementById('accessBtn');
   btn.disabled = true;
   btn.textContent = 'CHECKING...';
@@ -7305,11 +8185,6 @@ async function accessGate() {
     const status = data && data.status;
 
     if (status === 'PAID' && data.token) {
-      currentEmail = email.toLowerCase();
-      currentSessionToken = data.token;
-      sessionStorage.setItem('clientPulseAuth', currentEmail);
-      sessionStorage.setItem('clientPulseSessionToken', currentSessionToken);
-
       // "Remember me" is opt-in and only saves after a successful login
       // (never on a failed attempt) — plain localStorage has no real
       // encryption, so this is a convenience trade-off the person
@@ -7323,8 +8198,20 @@ async function accessGate() {
         localStorage.removeItem('cpRememberedPassword');
       }
 
-      hideGate();
-      startSessionWatch();
+      finalizeLoginSuccess(email, data.token, data.daysUntilExpiration);
+    } else if (status === 'AGREEMENT_REQUIRED' && data.token) {
+      // Credentials were correct and a session token was already
+      // issued — "Remember me" still applies here, same as a normal
+      // successful login, since the password check has already passed.
+      const remember = document.getElementById('gateRememberMe').checked;
+      if (remember){
+        localStorage.setItem('cpRememberedEmail', email);
+        localStorage.setItem('cpRememberedPassword', password);
+      } else {
+        localStorage.removeItem('cpRememberedEmail');
+        localStorage.removeItem('cpRememberedPassword');
+      }
+      showPolicyAgreementStep(email, data.token, data.agreementVersion, data.agreementEffectiveDate);
     } else if (status === 'NEEDS_SETUP') {
       // First time this email is logging in — no password on file yet.
       showSetupPasswordStep(email);
@@ -7367,12 +8254,9 @@ async function submitSetupPassword() {
     });
     const data = await res.json();
     if (data && data.status === 'PAID' && data.token) {
-      currentEmail = pendingFlowEmail.toLowerCase();
-      currentSessionToken = data.token;
-      sessionStorage.setItem('clientPulseAuth', currentEmail);
-      sessionStorage.setItem('clientPulseSessionToken', currentSessionToken);
-      hideGate();
-      startSessionWatch();
+      finalizeLoginSuccess(pendingFlowEmail, data.token, data.daysUntilExpiration);
+    } else if (data && data.status === 'AGREEMENT_REQUIRED' && data.token) {
+      showPolicyAgreementStep(pendingFlowEmail, data.token, data.agreementVersion, data.agreementEffectiveDate);
     } else if (data && data.status === 'ALREADY_SET') {
       errEl.textContent = 'A password is already set for this account. Please log in instead.';
       setTimeout(showEmailStep, 1800);
@@ -7455,12 +8339,9 @@ async function submitResetPassword() {
     });
     const data = await res.json();
     if (data && data.status === 'ok' && data.token) {
-      currentEmail = pendingFlowEmail.toLowerCase();
-      currentSessionToken = data.token;
-      sessionStorage.setItem('clientPulseAuth', currentEmail);
-      sessionStorage.setItem('clientPulseSessionToken', currentSessionToken);
-      hideGate();
-      startSessionWatch();
+      finalizeLoginSuccess(pendingFlowEmail, data.token);
+    } else if (data && data.status === 'AGREEMENT_REQUIRED' && data.token) {
+      showPolicyAgreementStep(pendingFlowEmail, data.token, data.agreementVersion, data.agreementEffectiveDate);
     } else if (data && data.status === 'EXPIRED_CODE') {
       errEl.textContent = 'That code has expired. Please request a new one.';
     } else if (data && data.status === 'INVALID_CODE') {
@@ -7483,15 +8364,16 @@ function startSessionWatch() {
 
 async function checkSessionStillValid() {
   if (!currentEmail) return;
-  try {
-    await fetchAccessList();
-    const row = liveAccessList.find(r => r.email === currentEmail);
-    if (!row || row.sessionToken !== currentSessionToken) {
-      logoutUser('You were logged out because this account was used on another device.');
-    }
-  } catch (e) {
-    // Transient network blip — don't log someone out over that
+  // This runs every 30 seconds for the entire time someone stays logged
+  // in — previously that meant re-fetching every buyer's row, forever,
+  // just to check one person's token. Now it's a single cached lookup.
+  const result = await checkSessionFast(currentEmail, currentSessionToken);
+  if (result && result.valid === false) {
+    logoutUser('You were logged out because this account was used on another device.');
   }
+  // result === null (network failure): deliberately does nothing, same
+  // as before — a transient blip shouldn't log anyone out; the next
+  // poll 30 seconds later gets another chance.
 }
 
 function hideGate() {
@@ -7507,6 +8389,7 @@ function hideGate() {
     loadDailyStats();
     fetchBrandConfig().then(config => populateBrandingFields(config));
     fetchSendHour().then(hour => populateSendHour(hour));
+  fetchAdvanceDays().then(days => populateAdvanceDays(days));
     refreshPersonalLink();
     checkAdvisorActiveStatus();
     if (currentEmail === ADMIN_EMAIL){
@@ -8760,23 +9643,22 @@ function setupClientsTab(){
 (async function() {
   setupPasswordHandling();
   setupClientsTab();
-  // Only fetchAccessList actually gates what the person sees next (it's
-  // the access-control check the login gate itself depends on) — dues
-  // and birthday client data are NOT needed to show the gate or the
-  // dashboard shell, so blocking on them here was adding two full
-  // Apps Script round-trips (each 1-3+ seconds in practice) to every
-  // single app open before the person could even see the login screen,
-  // even though refreshDuesClientList/refreshBirthdayClientList already
+  // The gate/dashboard decision now runs on a single cached, single-user
+  // check (checkAuthFast) instead of downloading every buyer's row just
+  // to look up this one person — this used to be the one genuinely
+  // blocking step every app open had to wait on (previously a full
+  // Apps Script round-trip reading the whole buyer list). Dues/birthday
+  // client data still isn't needed here either way — those already
   // render cached data instantly on their own and only need their live
-  // refresh to happen at some point, not necessarily before first paint.
-  await fetchAccessList();
+  // refresh to happen at some point, not before first paint.
+  const alreadyAuthed = await checkAuthFast();
   // Fire and forget — these run in the background. Each one shows its
   // own cached data immediately (useCache=true) and updates in place
   // once the live fetch resolves, so there's nothing for the boot
   // sequence to wait on here.
   refreshDuesClientList(true);
   refreshBirthdayClientList(true);
-  if (!checkAuth()) {
+  if (!alreadyAuthed) {
     // Show gate with proper z-index and show class
     const gate = document.getElementById('gateScreen');
     gate.classList.add('show');
