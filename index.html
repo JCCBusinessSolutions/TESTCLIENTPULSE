@@ -1293,9 +1293,9 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
     <div id="policyAgreementStep" style="display:none;">
       <div class="gate-hint" style="margin-bottom:10px;">
         Please review and accept the current CLIENT PULSE Policy Agreement to continue.
-        <span style="display:block;margin-top:4px;font-weight:700;color:#0C447C;">Version <span id="paVersionLabel">—</span> &middot; Effective <span id="paEffectiveDateLabel">—</span></span>
+        <span style="display:block;margin-top:4px;font-weight:700;color:#ffd700;">Version <span id="paVersionLabel">—</span> &middot; Effective <span id="paEffectiveDateLabel">—</span></span>
       </div>
-      <div id="policyAgreementScrollBox" onscroll="_checkPolicyAgreementScrolled()" style="max-height:260px;overflow-y:auto;border:1px solid #ddd;border-radius:8px;padding:14px;font-size:12.5px;line-height:1.6;color:#333;background:#fff;margin-bottom:8px;">
+      <div id="policyAgreementScrollBox" onscroll="_checkPolicyAgreementScrolled()" style="max-height:260px;overflow-y:auto;border:1px solid #ddd;border-radius:8px;padding:14px;font-size:12.5px;line-height:1.6;color:#333;background:#fff;margin-bottom:8px;text-align:left;">
 <p style="font-weight:700;color:#0C447C;font-size:13.5px;margin:0 0 8px;">Part 1: 15-Day Limited Warranty</p>
 <p style="font-weight:700;color:#0C447C;margin:14px 0 6px;">1. Overview</p>
   <p>
@@ -1685,7 +1685,7 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
   </div>
       </div>
       <div id="policyAgreementScrollHint" style="font-size:11px;color:#C99A3B;font-weight:700;margin:0 2px 10px;">Scroll to the bottom to continue &darr;</div>
-      <label style="display:flex;align-items:flex-start;gap:8px;margin:4px 2px 12px;font-size:12.5px;color:#333;cursor:pointer;">
+      <label style="display:flex;align-items:flex-start;gap:8px;margin:4px 2px 12px;font-size:12.5px;color:#ffd700;text-align:left;cursor:pointer;">
         <input type="checkbox" id="policyAgreementCheckbox" disabled style="width:16px;height:16px;flex-shrink:0;margin-top:2px;cursor:pointer;accent-color:#0C447C;">
         I have read, understood, and agree to the CLIENT PULSE Policy Agreement, including the 15-Day Limited Warranty and Data Privacy Policy.
       </label>
@@ -1837,11 +1837,11 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
         <path d="M310,55 q5,-5 10,0 M325,60 q5,-5 10,0" stroke="#C99A3B" stroke-width="2" fill="none" opacity="0.4" stroke-linecap="round"/>
       </svg>
       <div class="relative z-10 flex items-center gap-4">
-        <div class="relative w-14 h-14 flex-shrink-0 cursor-pointer" id="heroPhotoWrap" onclick="document.getElementById('heroPhotoInput').click()" title="Tap to set your profile photo">
-          <div class="w-14 h-14 rounded-full bg-[#FBEFD8] flex items-center justify-center text-xl overflow-hidden border-2 border-white shadow" id="heroPhotoCircle" style="background-size:cover;background-position:center;">
+        <div class="relative w-20 h-20 sm:w-24 sm:h-24 flex-shrink-0 cursor-pointer" id="heroPhotoWrap" onclick="document.getElementById('heroPhotoInput').click()" title="Tap to set your profile photo">
+          <div class="w-20 h-20 sm:w-24 sm:h-24 rounded-full bg-[#FBEFD8] flex items-center justify-center text-3xl overflow-hidden border-2 border-white shadow" id="heroPhotoCircle" style="background-size:cover;background-position:center;">
             <span id="heroPhotoPlaceholder">👤</span>
           </div>
-          <div class="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-navy text-white flex items-center justify-center text-[10px] border-2 border-white">📷</div>
+          <div class="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-navy text-white flex items-center justify-center text-sm border-2 border-white">📷</div>
         </div>
         <input type="file" id="heroPhotoInput" accept="image/*" style="display:none;">
         <div>
@@ -2607,15 +2607,6 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
          SETTINGS (existing real functionality — Setup / Branding / Password)
          ============================================================ -->
     <div id="settingsSection" data-section="settings" class="mt-2">
-
-      <div class="card" id="todayLoginsCard" style="display:none;">
-        <h2>Today's Logins</h2>
-        <p class="sub">Every advisor who logged in today, most recent first. Visible only to you.</p>
-        <div id="todayLoginsList" style="font-size:13px; color:var(--ink-soft,#4A5A68);">Loading&hellip;</div>
-        <div class="row" style="margin-top:10px;">
-          <button class="btn-ghost" id="refreshTodayLoginsBtn" style="width:100%;">REFRESH</button>
-        </div>
-      </div>
 
       <div class="card" id="configCard" style="display:none;">
         <h2>Connection Setup</h2>
@@ -3794,35 +3785,6 @@ async function checkAdvisorActiveStatus(){
     // Transient network issue — don't lock someone out over a blip.
   }
 }
-
-// Admin-only "who's logged in today" panel — hits CLIENT_PULSE_SHEET_API
-// (the same backend that handles login itself), not the Dues/Broadcast
-// Script URL, since login events are recorded there.
-async function loadTodayLogins(){
-  const listEl = document.getElementById('todayLoginsList');
-  if (!listEl) return;
-  listEl.textContent = 'Loading\u2026';
-  try{
-    const res = await fetch(CLIENT_PULSE_SHEET_API + '?action=getTodayLogins');
-    const data = await res.json();
-    const logins = (data && data.logins) || [];
-    if (logins.length === 0){
-      listEl.textContent = 'No logins yet today.';
-      return;
-    }
-    listEl.innerHTML = '<div style="margin-bottom:8px; font-weight:700; color:var(--navy,#0C447C);">' + logins.length + ' login' + (logins.length === 1 ? '' : 's') + ' today</div>'
-      + logins.map(l =>
-          '<div style="display:flex; justify-content:space-between; padding:6px 0; border-bottom:1px solid var(--line,#E4DCC8);">'
-          + '<span>' + escapeHtml(l.email) + '</span>'
-          + '<span style="color:var(--ink-soft,#4A5A68);">' + escapeHtml(l.time) + '</span>'
-          + '</div>'
-        ).join('');
-  }catch(e){
-    listEl.textContent = 'Couldn\u2019t load today\u2019s logins right now.';
-  }
-}
-document.getElementById('refreshTodayLoginsBtn').addEventListener('click', loadTodayLogins);
-
 
 // Mirrors REMINDER_DAYS_BEFORE_LOCK in Code.gs — kept as a separate
 // frontend constant since this file can't import from the Apps Script
@@ -6860,12 +6822,33 @@ el('refreshDueToday').addEventListener('click', loadDueToday);
   updateSetupBlinkState();
 })();
 
-loadDueToday();
-loadDailyStats();
-fetchBrandConfig().then(config => populateBrandingFields(config));
-fetchSendHour().then(hour => populateSendHour(hour));
+// Tracks whether the six calls below already ran once for this page
+// load, so hideGate() (fired right after login) doesn't blast the same
+// Apps Script deployment with a second, near-simultaneous copy of every
+// request. Apps Script has a real concurrent-execution ceiling per
+// script — stacking ~12 requests within a couple seconds of each other
+// was causing some to queue (slow numbers) and occasionally get bounced
+// with a non-JSON quota/error page (the "did not match the expected
+// pattern" toast, which is just Safari's generic message for res.json()
+// choking on non-JSON content).
+let dashboardDataLoadedOnce = false;
+
+function loadCoreDashboardData(){
+  loadDueToday();
+  loadDailyStats();
+  fetchBrandConfig().then(config => populateBrandingFields(config));
+  fetchSendHour().then(hour => populateSendHour(hour));
   fetchAdvanceDays().then(days => populateAdvanceDays(days));
-refreshPersonalLink();
+  refreshPersonalLink();
+  dashboardDataLoadedOnce = true;
+}
+
+// Only fire immediately if a Setup URL is already saved on this device —
+// otherwise there's nothing to call yet, and hideGate() will cover it
+// once login resolves one (e.g. via a ?s= personal link on a new device).
+if (getScriptUrl()) {
+  loadCoreDashboardData();
+}
 
 </script>
 
@@ -6985,6 +6968,32 @@ refreshPersonalLink();
     placeholder.style.display = 'none';
   }
 
+  // PROFILE PHOTO CACHE — avoids re-downloading + re-base64ing the same
+  // Drive file from Apps Script on every single login/refresh. Keyed by
+  // profileImageFileId (the pointer the backend already tracks), stored
+  // locally per-browser like the rest of this app's localStorage usage.
+  // A changed fileId (new upload, or from another device) automatically
+  // busts the cache — we only ever trust the cache when the fileId
+  // matches exactly what getAdvisorProfile just returned.
+  const PHOTO_CACHE_ID_KEY = 'cpProfilePhotoFileId';
+  const PHOTO_CACHE_DATA_KEY = 'cpProfilePhotoDataUrl';
+
+  function getCachedProfilePhoto(fileId){
+    try{
+      if (localStorage.getItem(PHOTO_CACHE_ID_KEY) === fileId){
+        return localStorage.getItem(PHOTO_CACHE_DATA_KEY);
+      }
+    }catch(e){ /* localStorage unavailable — fall through to network */ }
+    return null;
+  }
+
+  function setCachedProfilePhoto(fileId, dataUrl){
+    try{
+      localStorage.setItem(PHOTO_CACHE_ID_KEY, fileId);
+      localStorage.setItem(PHOTO_CACHE_DATA_KEY, dataUrl);
+    }catch(e){ /* storage full/unavailable — just skip caching */ }
+  }
+
   async function loadAdvisorProfile(){
     const profile = await fetchAdvisorProfile();
     if (profile && profile.advisorName){
@@ -6994,8 +7003,16 @@ refreshPersonalLink();
     updateHeaderIdentity(profile && profile.advisorName);
     renderGreeting();
     if (profile && profile.profileImageFileId){
-      const photo = await fetchProfilePhoto();
-      if (photo) showPhoto(photo);
+      const cached = getCachedProfilePhoto(profile.profileImageFileId);
+      if (cached){
+        showPhoto(cached);
+      }else{
+        const photo = await fetchProfilePhoto();
+        if (photo){
+          showPhoto(photo);
+          setCachedProfilePhoto(profile.profileImageFileId, photo);
+        }
+      }
     }
   }
 
@@ -7020,8 +7037,16 @@ refreshPersonalLink();
     if (!file) return;
     try{
       const { base64, mimeType } = await resizeImageForUpload(file, 400, 0.85);
-      showPhoto('data:' + mimeType + ';base64,' + base64);
+      const dataUrl = 'data:' + mimeType + ';base64,' + base64;
+      showPhoto(dataUrl);
       await callBackend({ action:'uploadProfileImage', base64: base64, mimeType: mimeType });
+      // Refresh the fileId from the backend rather than guessing it from
+      // the upload response (shape not guaranteed) — this is the only
+      // extra call, and only happens on an actual upload, not every login.
+      const freshProfile = await fetchAdvisorProfile();
+      if (freshProfile && freshProfile.profileImageFileId){
+        setCachedProfilePhoto(freshProfile.profileImageFileId, dataUrl);
+      }
       showToast('Profile photo updated.');
     }catch(err){
       showToast('Could not upload photo: ' + err.message);
@@ -7826,7 +7851,7 @@ function wireRefreshFeedback(buttonId){
    longer matches what the server has, it auto-logs-out, because
    that means the account was used somewhere else more recently.
    ============================================================ */
-const CLIENT_PULSE_SHEET_API = 'https://script.google.com/macros/s/AKfycbxEleKyoOgcsFZxOH7Dib-QLedLmnaDo65WoqO-dwF_dMEHjIHIpKokxohinSD6ZxtT3A/exec';
+const CLIENT_PULSE_SHEET_API = 'https://script.google.com/macros/s/AKfycbxTGKBksRBKOpmoLVZ6EcMwL-eM8q5PuE4KcMHq0on-TbFWKalbdiAJjzhhRteGswtrwg/exec';
 const ADMIN_EMAIL = 'castrojaymar0916@gmail.com';
 const HARDCODED_PAID = [ADMIN_EMAIL];
 const SESSION_CHECK_INTERVAL_MS = 30000;
@@ -8027,11 +8052,23 @@ function hideAllGateSteps() {
 let pendingAgreementEmail = '';
 let pendingAgreementToken = '';
 let pendingAgreementVersion = '';
+let pendingAgreementName = '';
+let pendingAgreementOrg = '';
 
-function showPolicyAgreementStep(email, token, agreementVersion, agreementEffectiveDate) {
+function showPolicyAgreementStep(email, token, agreementVersion, agreementEffectiveDate, advisorName, advisorOrg) {
   pendingAgreementEmail = email;
   pendingAgreementToken = token;
   pendingAgreementVersion = agreementVersion;
+  // Falls back to the email address only if the Buyers sheet has no
+  // NAME column value for this Advisor — the standalone Policy
+  // Agreement page does the same fallback, so this is just belt and
+  // suspenders in case the backend ever returns a blank name.
+  pendingAgreementName = (advisorName || '').trim();
+  // Organization / Agency on the standalone page is prefilled from the
+  // Advisor's Branch (Buyers sheet BRANCH column), not typed manually —
+  // stays blank if the Advisor has no branch on file, same fallback
+  // pattern as the name above.
+  pendingAgreementOrg = (advisorOrg || '').trim();
   clearAllGateErrors();
   hideAllGateSteps();
   document.getElementById('paVersionLabel').textContent = agreementVersion || '—';
@@ -8106,13 +8143,35 @@ async function submitPolicyAgreement() {
     const data = await res.json();
 
     if (data && data.status === 'PAID' && data.token) {
+      // Acceptance (checkbox + scroll-gate, right here in Client Pulse)
+      // is recorded on the backend at this point. The backend itself
+      // sends NO email — the ONLY email per acceptance comes from the
+      // standalone JCC_POLICY_AGREEMENTS.html page, opened here and
+      // auto-triggered to generate + email the real signed-copy PDF,
+      // using its own proven real, on-screen capture. This is now the
+      // single send point: exactly one open, one auto-generate, one
+      // email — no duplicate, and the PDF is actually included. If the
+      // pop-up is blocked, the acceptance is still fully recorded on
+      // the backend; only the emailed copy is skipped for this one
+      // attempt, and the Advisor (or JCC) can always visit the
+      // standalone page manually to generate one.
+      try {
+        const pdfPageUrl = 'https://jccbusinesssolutions.github.io/POLICYAGREEMENTS/'
+          + '?advisorEmail=' + encodeURIComponent(pendingAgreementEmail)
+          + '&advisorName=' + encodeURIComponent(pendingAgreementName || pendingAgreementEmail)
+          + '&advisorOrg=' + encodeURIComponent(pendingAgreementOrg)
+          + '&auto=1';
+        window.open(pdfPageUrl, '_blank', 'noopener');
+      } catch (popupErr) {
+        // Ignore — acceptance is already recorded regardless.
+      }
       finalizeLoginSuccess(pendingAgreementEmail, data.token, data.daysUntilExpiration);
     } else if (data && data.status === 'VERSION_CHANGED') {
       // The admin bumped the version while this modal was open — reload
       // with the new version/date rather than silently record acceptance
       // of a now-outdated one.
       errEl.textContent = 'The Policy Agreement was just updated. Please review the new version below.';
-      showPolicyAgreementStep(pendingAgreementEmail, pendingAgreementToken, data.agreementVersion, data.agreementEffectiveDate);
+      showPolicyAgreementStep(pendingAgreementEmail, pendingAgreementToken, data.agreementVersion, data.agreementEffectiveDate, pendingAgreementName, pendingAgreementOrg);
     } else if (data && data.status === 'DENIED') {
       errEl.textContent = (data && data.message) || 'Your session has expired. Please log in again.';
       setTimeout(showEmailStep, 1800);
@@ -8211,7 +8270,7 @@ async function accessGate() {
         localStorage.removeItem('cpRememberedEmail');
         localStorage.removeItem('cpRememberedPassword');
       }
-      showPolicyAgreementStep(email, data.token, data.agreementVersion, data.agreementEffectiveDate);
+      showPolicyAgreementStep(email, data.token, data.agreementVersion, data.agreementEffectiveDate, data.advisorName, data.advisorOrg);
     } else if (status === 'NEEDS_SETUP') {
       // First time this email is logging in — no password on file yet.
       showSetupPasswordStep(email);
@@ -8256,7 +8315,7 @@ async function submitSetupPassword() {
     if (data && data.status === 'PAID' && data.token) {
       finalizeLoginSuccess(pendingFlowEmail, data.token, data.daysUntilExpiration);
     } else if (data && data.status === 'AGREEMENT_REQUIRED' && data.token) {
-      showPolicyAgreementStep(pendingFlowEmail, data.token, data.agreementVersion, data.agreementEffectiveDate);
+      showPolicyAgreementStep(pendingFlowEmail, data.token, data.agreementVersion, data.agreementEffectiveDate, data.advisorName, data.advisorOrg);
     } else if (data && data.status === 'ALREADY_SET') {
       errEl.textContent = 'A password is already set for this account. Please log in instead.';
       setTimeout(showEmailStep, 1800);
@@ -8341,7 +8400,7 @@ async function submitResetPassword() {
     if (data && data.status === 'ok' && data.token) {
       finalizeLoginSuccess(pendingFlowEmail, data.token);
     } else if (data && data.status === 'AGREEMENT_REQUIRED' && data.token) {
-      showPolicyAgreementStep(pendingFlowEmail, data.token, data.agreementVersion, data.agreementEffectiveDate);
+      showPolicyAgreementStep(pendingFlowEmail, data.token, data.agreementVersion, data.agreementEffectiveDate, data.advisorName, data.advisorOrg);
     } else if (data && data.status === 'EXPIRED_CODE') {
       errEl.textContent = 'That code has expired. Please request a new one.';
     } else if (data && data.status === 'INVALID_CODE') {
@@ -8382,20 +8441,16 @@ function hideGate() {
     document.getElementById('gateScreen').style.zIndex = '10';
     document.getElementById('gateScreen').style.display = 'none';
     document.body.classList.add('cp-authed');
-    // Re-run all data fetches after login completes — necessary on new
-    // devices where the Setup URL was just decoded from the personal link
-    // (?s= param) and wasn't available during the initial page-load fetch.
-    loadDueToday();
-    loadDailyStats();
-    fetchBrandConfig().then(config => populateBrandingFields(config));
-    fetchSendHour().then(hour => populateSendHour(hour));
-  fetchAdvanceDays().then(days => populateAdvanceDays(days));
-    refreshPersonalLink();
-    checkAdvisorActiveStatus();
-    if (currentEmail === ADMIN_EMAIL){
-      document.getElementById('todayLoginsCard').style.display = 'block';
-      loadTodayLogins();
+    // Re-run the core data fetches only if they haven't already run this
+    // page load. Necessary on new devices where the Setup URL was just
+    // decoded from the personal link (?s= param) and wasn't available
+    // yet at the top-level page-load fetch — but on an ordinary login
+    // (URL already saved), that top-level fetch already covered this,
+    // so firing again here would just double every request unnecessarily.
+    if (!dashboardDataLoadedOnce) {
+      loadCoreDashboardData();
     }
+    checkAdvisorActiveStatus();
   } catch (e) {
     var emailError = document.getElementById('emailError');
     if (emailError) emailError.textContent = 'Something went wrong unlocking the dashboard: ' + e.message;
@@ -8432,6 +8487,24 @@ function logoutUser(message) {
 
 document.getElementById('gateEmail').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') accessGate();
+});
+
+// SAFEGUARD: "Remember Me" pre-fills BOTH the email and password fields
+// from localStorage, which is shared across the entire browser profile
+// (every tab, indefinitely) — not scoped to any one account. If someone
+// then edits the email field to a DIFFERENT address without also
+// clearing the password, the old remembered password could get
+// silently submitted alongside the new email. This clears the password
+// field the moment the email is changed away from whatever was
+// remembered, so a stale credential can never ride along with an
+// intentionally different email — the person is forced to type a
+// fresh password for the new account instead.
+document.getElementById('gateEmail').addEventListener('input', () => {
+  const rememberedEmail = (localStorage.getItem('cpRememberedEmail') || '').toLowerCase();
+  const typedEmail = document.getElementById('gateEmail').value.trim().toLowerCase();
+  if (rememberedEmail && typedEmail !== rememberedEmail) {
+    document.getElementById('gatePassword').value = '';
+  }
 });
 
 // ============================================================
