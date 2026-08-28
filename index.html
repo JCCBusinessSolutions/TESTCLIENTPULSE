@@ -1922,17 +1922,26 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
 <!-- ============================================================
      MOBILE HEADER
      ============================================================ -->
-<div class="lg:hidden sticky top-0 z-30 bg-navy px-4 py-4 flex items-center gap-3 shadow-lg" id="mobileHeaderBar">
-  <div class="flex-1 min-w-0">
-    <div class="font-heading text-white text-[15px] font-bold leading-tight" id="mobileTitleLine1">Client Payment</div>
-    <div class="font-heading text-gold text-[15px] font-bold tracking-wide leading-tight" id="mobileTitleLine2">Due Reminder</div>
+<div class="lg:hidden sticky top-0 z-30 bg-navy shadow-lg" id="mobileHeaderBar">
+  <div class="px-4 py-4 flex items-center gap-3">
+    <div class="flex-1 min-w-0">
+      <div class="font-heading text-white text-[15px] font-bold leading-tight" id="mobileTitleLine1">Client Payment</div>
+      <div class="font-heading text-gold text-[15px] font-bold tracking-wide leading-tight" id="mobileTitleLine2">Due Reminder</div>
+    </div>
+    <button class="theme-switch" id="themeToggleMobile" onclick="toggleDarkMode()">
+      <span class="theme-switch-label text-white" id="themeToggleLabelMobile" style="display:none;">Light Mode</span>
+      <span class="theme-switch-track"><span class="theme-switch-thumb"></span></span>
+    </button>
+    <button class="config-link" id="toggleConfig">Setup</button>
   </div>
-  <button class="theme-switch" id="themeToggleMobile" onclick="toggleDarkMode()">
-    <span class="theme-switch-label text-white" id="themeToggleLabelMobile" style="display:none;">Light Mode</span>
-    <span class="theme-switch-track"><span class="theme-switch-thumb"></span></span>
-  </button>
-  <button id="goToSheetBtnMobile" onclick="goToGoogleSheet()" style="background:var(--navy,#003B7A); border:1.5px solid #fff; color:#fff; font-weight:700; font-size:11px; letter-spacing:.2px; padding:7px 10px; border-radius:999px; white-space:nowrap; flex:0 0 auto;">Client List</button>
-  <button class="config-link" id="toggleConfig">Setup</button>
+  <!-- Client List sits in its own full-width row below Setup, mobile only —
+       it was previously crammed into the row above alongside the title,
+       toggle, and Setup button, which made it render far too wide/cramped
+       on real phones (confirmed via a live screenshot on an actual device).
+       Its own row gives it room without touching the desktop layout at all. -->
+  <div class="px-4 pb-3">
+    <button id="goToSheetBtnMobile" onclick="goToGoogleSheet()" style="background:var(--navy,#003B7A); border:1.5px solid #fff; color:#fff; font-weight:700; font-size:12px; letter-spacing:.3px; padding:7px 16px; border-radius:999px; white-space:nowrap; width:auto;">Client List</button>
+  </div>
 </div>
 
 <!-- ============================================================
