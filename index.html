@@ -74,6 +74,7 @@
      the top. This rule guarantees correct positioning regardless of
      whether the CDN loads, since it doesn't depend on Tailwind at all. */
   #bcPickerBody { flex-direction:column; }
+  #bcPickerResizeHandle { display:flex; }
   #bcPickerFiltersPanel { border-bottom:1px solid var(--line,#E4DCC8); }
   @media (min-width:1024px){
     /* Split layout: an even 50/50 divide, filters on the left, client
@@ -2762,6 +2763,8 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
           <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
             <span style="font-size:11px; color:#6B7280; margin-right:2px;">Quick select:</span>
             <button type="button" class="bc-quick-btn" data-top="10">Top 10</button>
+            <button type="button" class="bc-quick-btn" data-top="20">Top 20</button>
+            <button type="button" class="bc-quick-btn" data-top="30">Top 30</button>
             <button type="button" class="bc-quick-btn" data-top="50">Top 50</button>
             <button type="button" class="bc-quick-btn" data-top="100">Top 100</button>
             <button type="button" class="bc-quick-btn" id="bcSelectAllBtn">Select All</button>
@@ -2775,7 +2778,7 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
              the filters above and the client list below by dragging —
              hidden entirely at the lg: breakpoint, where the real 50/50
              split layout already solves this. -->
-        <div id="bcPickerResizeHandle" style="display:flex; align-items:center; justify-content:center; height:20px; flex:0 0 auto; cursor:ns-resize; touch-action:none; background:#fff; border-bottom:1px solid var(--line,#E4DCC8);">
+        <div id="bcPickerResizeHandle" style="align-items:center; justify-content:center; height:20px; flex:0 0 auto; cursor:ns-resize; touch-action:none; background:#fff; border-bottom:1px solid var(--line,#E4DCC8);">
           <div style="width:40px; height:4px; border-radius:999px; background:#D1D5DB;"></div>
         </div>
 
