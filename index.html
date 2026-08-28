@@ -1942,8 +1942,8 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
 
   <!-- Desktop top header -->
   <div class="hidden lg:flex items-center justify-between px-10 py-5 bg-white border-b border-bordertan" id="desktopHeaderBar">
-    <div class="font-heading text-navy text-2xl font-bold" id="desktopTitle">Client Payment Due Reminder</div>
-    <div class="flex items-center gap-5">
+    <div class="font-heading text-navy text-2xl font-bold" id="desktopTitle" style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0; flex:1 1 auto;">Client Payment Due Reminder</div>
+    <div class="flex items-center gap-5" style="flex-shrink:0;">
       <button id="goToSheetBtnDesktop" onclick="goToGoogleSheet()" style="background:var(--navy,#003B7A); border:1.5px solid #fff; color:#fff; font-weight:700; font-size:13px; letter-spacing:.2px; padding:9px 18px; border-radius:999px; white-space:nowrap; cursor:pointer;">Client List</button>
       <button class="theme-switch" id="themeToggleDesktop" onclick="toggleDarkMode()">
         <span class="theme-switch-label text-ink" id="themeToggleLabelDesktop">Light Mode</span>
@@ -1953,8 +1953,8 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
       <div class="flex items-center gap-3 cursor-pointer" onclick="openSettingsPage();">
         <div class="w-10 h-10 rounded-full bg-navy text-gold font-heading font-bold flex items-center justify-center text-sm" id="headerAdvisorAvatar">--</div>
         <div>
-          <div class="text-sm font-semibold text-ink leading-tight" id="headerAdvisorName">Your Name</div>
-          <div class="text-xs text-muted leading-tight">Financial Advisor</div>
+          <div class="text-sm font-semibold text-ink leading-tight" id="headerAdvisorName" style="white-space:nowrap;">Your Name</div>
+          <div class="text-xs text-muted leading-tight" style="white-space:nowrap;">Financial Advisor</div>
         </div>
         <span class="text-muted text-xs">▾</span>
       </div>
