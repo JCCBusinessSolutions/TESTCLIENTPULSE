@@ -165,6 +165,9 @@
   .summary-grid .num{ font-size:20px; font-weight:700; color:var(--navy); font-family:'Playfair Display',serif; }
   .summary-grid .lbl{ font-size:11px; color:var(--muted,#76839A); margin-top:2px; }
   .footer-note{ text-align:center; font-size:11px; color:#9CA3AF; }
+  .btn-gold-navy:hover { background:#E1A324 !important; }
+  .btn-gold-navy:active { transform:translateY(1px); }
+
   .config-link{
     background:var(--gold);
     border:none;
@@ -1928,7 +1931,7 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
     <span class="theme-switch-label text-white" id="themeToggleLabelMobile" style="display:none;">Light Mode</span>
     <span class="theme-switch-track"><span class="theme-switch-thumb"></span></span>
   </button>
-  <button id="goToSheetBtnMobile" onclick="goToGoogleSheet()" style="background:var(--navy,#003B7A); border:1.5px solid #fff; color:#fff; font-weight:700; font-size:11px; letter-spacing:.2px; padding:7px 10px; border-radius:999px; white-space:nowrap; flex:0 0 auto;">Go to Google Sheet</button>
+  <button id="goToSheetBtnMobile" onclick="goToGoogleSheet()" style="background:var(--navy,#003B7A); border:1.5px solid #fff; color:#fff; font-weight:700; font-size:11px; letter-spacing:.2px; padding:7px 10px; border-radius:999px; white-space:nowrap; flex:0 0 auto;">Client List</button>
   <button class="config-link" id="toggleConfig">Setup</button>
 </div>
 
@@ -2061,7 +2064,7 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
       </div>
       <div class="row" style="margin-top:14px;">
         <button class="btn-primary" id="refreshStats" style="display:flex;align-items:center;justify-content:center;gap:7px;flex:1;">🔄 REFRESH ACTIVITY</button>
-        <button class="btn-ghost" id="sendDuesAgainBtn" style="display:flex;align-items:center;justify-content:center;gap:7px;flex:1;">📨 SEND AGAIN</button>
+        <button class="btn-gold-navy" id="sendDuesAgainBtn" style="display:flex;align-items:center;justify-content:center;gap:7px;flex:1;background:var(--gold,#F5B335);color:var(--navy,#003B7A);border:none;font-weight:700;">📨 SEND AGAIN</button>
       </div>
       <div class="text-[11px] text-muted text-center mt-2" id="statsUpdatedAt"></div>
       <div id="duesSendAgainResult" style="display:none;margin-top:10px;padding:10px 12px;border-radius:8px;font-size:12.5px;line-height:1.5;"></div>
@@ -2227,7 +2230,7 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
         </div>
         <div class="row" style="margin-top:14px;">
           <button class="btn-primary" id="refreshBirthdayStats" style="display:flex;align-items:center;justify-content:center;gap:7px;flex:1;">🔄 REFRESH ACTIVITY</button>
-          <button class="btn-ghost" id="sendBirthdaysAgainBtn" style="display:flex;align-items:center;justify-content:center;gap:7px;flex:1;">📨 SEND AGAIN</button>
+          <button class="btn-gold-navy" id="sendBirthdaysAgainBtn" style="display:flex;align-items:center;justify-content:center;gap:7px;flex:1;background:var(--gold,#F5B335);color:var(--navy,#003B7A);border:none;font-weight:700;">📨 SEND AGAIN</button>
         </div>
         <div class="text-[11px] text-muted text-center mt-2" id="birthdayStatsUpdatedAt"></div>
         <div id="birthdaySendDiagnostic" style="display:none;margin-top:12px;padding:10px 12px;background:#FDF6E3;border:1px solid #F0DFA6;border-radius:8px;font-size:12.5px;color:#7A5C00;line-height:1.5;"></div>
@@ -2392,7 +2395,7 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
         </div>
         <div class="row" style="margin-top:14px;">
           <button class="btn-primary" id="refreshAnniversaryStats" style="display:flex;align-items:center;justify-content:center;gap:7px;flex:1;">🔄 REFRESH ACTIVITY</button>
-          <button class="btn-ghost" id="sendAnniversariesAgainBtn" style="display:flex;align-items:center;justify-content:center;gap:7px;flex:1;">📨 SEND AGAIN</button>
+          <button class="btn-gold-navy" id="sendAnniversariesAgainBtn" style="display:flex;align-items:center;justify-content:center;gap:7px;flex:1;background:var(--gold,#F5B335);color:var(--navy,#003B7A);border:none;font-weight:700;">📨 SEND AGAIN</button>
         </div>
         <div class="text-[11px] text-muted text-center mt-2" id="anniversaryStatsUpdatedAt"></div>
         <div id="anniversarySendAgainResult" style="display:none;margin-top:10px;padding:10px 12px;border-radius:8px;font-size:12.5px;line-height:1.5;"></div>
