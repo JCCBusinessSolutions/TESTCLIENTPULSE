@@ -1959,13 +1959,15 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
     </button>
     <button class="config-link" id="toggleConfig">Setup</button>
   </div>
-  <!-- Client List sits in its own full-width row below Setup, mobile only —
-       it was previously crammed into the row above alongside the title,
-       toggle, and Setup button, which made it render far too wide/cramped
-       on real phones (confirmed via a live screenshot on an actual device).
-       Its own row gives it room without touching the desktop layout at all. -->
-  <div class="px-4 pb-3">
-    <button id="goToSheetBtnMobile" onclick="goToGoogleSheet()" style="background:var(--navy,#003B7A); border:1.5px solid #fff; color:#fff; font-weight:700; font-size:12px; letter-spacing:.3px; padding:7px 16px; border-radius:999px; white-space:nowrap; width:auto;">Google Sheet</button>
+  <!-- Logout sits directly below Setup, upper-right — the mobile bottom
+       nav no longer carries a Logout tab (moved here instead), and the
+       "Google Sheet" quick-link that used to occupy this row was removed
+       per request. -->
+  <div class="px-4 pb-3" style="display:flex; justify-content:flex-end;">
+    <button id="mobileHeaderLogoutBtn" onclick="logoutUser()" style="background:none; border:1.5px solid #FF8A80; color:#FF8A80; font-weight:700; font-size:12px; letter-spacing:.3px; padding:7px 16px; border-radius:999px; white-space:nowrap; display:flex; align-items:center; gap:6px; width:auto; min-height:0;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/></svg>
+      Logout
+    </button>
   </div>
 </div>
 
@@ -3013,6 +3015,23 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
         <div class="status" id="advanceDaysStatus"></div>
       </div>
 
+      <div class="card" id="helpSupportCard">
+        <h2 style="display:flex; align-items:center; gap:8px;">
+          <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="var(--navy,#0C447C)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
+          Need Help?
+        </h2>
+        <p class="sub">We're here to help with your Due Reminder needs.</p>
+        <p class="sub" style="word-break:break-all;">Jccbusinesssolutions16@gmail.com</p>
+        <a href="mailto:Jccbusinesssolutions16@gmail.com" class="btn-gold" style="display:flex; align-items:center; justify-content:center; gap:7px; text-decoration:none; margin-bottom:10px; width:100%; box-sizing:border-box; padding:13px 18px; border-radius:14px; min-height:44px; font-weight:700; font-size:13px; letter-spacing:.4px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="m22 7-8.991 5.727a2 2 0 0 1-2.009 0L2 7"/><rect x="2" y="4" width="20" height="16" rx="2"/></svg>
+          Contact Support
+        </a>
+        <a href="https://www.facebook.com/profile.php?id=61591302882160" target="_blank" rel="noopener" style="display:flex; align-items:center; justify-content:center; gap:7px; padding:10px; border-radius:10px; background:var(--cream,#FDF8F0); border:1px solid var(--line,#E4DCC8); text-decoration:none; color:var(--navy,#0C447C); font-size:13px; font-weight:600;">
+          <svg width="17" height="17" viewBox="0 0 24 24" style="flex-shrink:0;"><path fill="#0866FF" d="M9.101 23.691v-7.98H6.627v-3.667h2.474v-1.58c0-4.085 1.848-5.978 5.858-5.978.401 0 .955.042 1.468.103a8.68 8.68 0 0 1 1.141.195v3.325a8.623 8.623 0 0 0-.653-.036 26.805 26.805 0 0 0-.733-.009c-.707 0-1.259.096-1.675.309a1.686 1.686 0 0 0-.679.622c-.258.42-.374.995-.374 1.752v1.297h3.919l-.386 2.103-.287 1.564h-3.246v8.245C19.396 23.238 24 18.179 24 12.044c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.628 3.874 10.35 9.101 11.647Z"/></svg>
+          Follow us for more apps!
+        </a>
+      </div>
+
       <div class="card" id="setupGuideCard" style="text-align:center;">
         <a href="https://jccbusinesssolutions.github.io/CLIENT-PULSE-SETUP-GUIDE/" style="display:inline-block;font-weight:700;color:#0C447C;text-decoration:underline;">CLIENT PULSE SETUP GUIDE</a>
       </div>
@@ -3033,13 +3052,11 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
      MOBILE BOTTOM NAV
      ============================================================ -->
 <nav class="mobile-bottom-nav lg:hidden" id="mobileBottomNav">
-  <div class="mobile-nav-item active" data-nav="dues" onclick="scrollToSection('dues')"><span class="ico">📊</span>Premium Due Reminders</div>
-  <div class="mobile-nav-item" data-nav="birthday" onclick="scrollToSection('birthday')"><span class="ico">🎂</span>Birthdays</div>
-  <div class="mobile-nav-item" data-nav="anniversary" onclick="scrollToSection('anniversary')"><span class="ico">🎉</span>Anniversaries</div>
-  <div class="mobile-nav-item" data-nav="upload" onclick="scrollToSection('upload')"><span class="ico">📤</span>Upload</div>
-  <div class="mobile-nav-item" data-nav="clients" onclick="scrollToSection('clients')"><span class="ico">👥</span>Clients</div>
-  <div class="mobile-nav-item" data-nav="broadcast" onclick="scrollToSection('broadcast')"><span class="ico">📣</span>Broadcast</div>
-  <div class="mobile-nav-item" id="mobileLogoutLink" onclick="logoutUser()" style="color:#d32f2f;"><span class="ico">🚪</span>Logout</div>
+  <div class="mobile-nav-item active" data-nav="dues" onclick="scrollToSection('dues')"><span class="ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M22 8c0-2.3-.8-4.3-2-6"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/><path d="M4 2C2.8 3.7 2 5.7 2 8"/></svg></span>Premium Due Reminders</div>
+  <div class="mobile-nav-item" data-nav="birthday" onclick="scrollToSection('birthday')"><span class="ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M20 21v-8a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8"/><path d="M4 16s.5-1 2-1 2.5 2 4 2 2.5-2 4-2 2.5 2 4 2 2-1 2-1"/><path d="M2 21h20"/><path d="M7 8v3"/><path d="M12 8v3"/><path d="M17 8v3"/><path d="M7 4h.01"/><path d="M12 4h.01"/><path d="M17 4h.01"/></svg></span>Birthdays</div>
+  <div class="mobile-nav-item" data-nav="anniversary" onclick="scrollToSection('anniversary')"><span class="ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M5.8 11.3 2 22l10.7-3.79"/><path d="M4 3h.01"/><path d="M22 8h.01"/><path d="M15 2h.01"/><path d="M22 20h.01"/><path d="m22 2-2.24.75a2.9 2.9 0 0 0-1.96 3.12c.1.86-.57 1.63-1.45 1.63h-.38c-.86 0-1.6.6-1.76 1.44L14 10"/><path d="m22 13-.82-.33c-.86-.34-1.82.2-1.98 1.11c-.11.7-.72 1.22-1.43 1.22H17"/><path d="m11 2 .33.82c.34.86-.2 1.82-1.11 1.98C9.52 4.9 9 5.52 9 6.23V7"/><path d="M11 13c1.93 1.93 2.83 4.17 2 5-.83.83-3.07-.07-5-2-1.93-1.93-2.83-4.17-2-5 .83-.83 3.07.07 5 2Z"/></svg></span>Anniversaries</div>
+  <div class="mobile-nav-item" data-nav="clients" onclick="scrollToSection('clients')"><span class="ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M18 21a8 8 0 0 0-16 0"/><circle cx="10" cy="8" r="5"/><path d="M22 20c0-3.37-2-6.5-4-8a5 5 0 0 0-.45-8.3"/></svg></span>Clients</div>
+  <div class="mobile-nav-item" data-nav="broadcast" onclick="scrollToSection('broadcast')"><span class="ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></svg></span>Broadcast</div>
 </nav>
 
 <div class="toast" id="toast"></div>
