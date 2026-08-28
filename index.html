@@ -2727,6 +2727,11 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
           </div>
           <div id="bcManualEmailStatus" style="font-size:11.5px; margin:-4px 0 10px; min-height:14px;"></div>
 
+          <div style="font-size:11px; color:#6B7280; margin-bottom:6px;">Or upload a list (2 columns: Name, Email):</div>
+          <button type="button" id="bcExcelUploadBtn" style="width:100%; padding:9px 12px; border:1px dashed var(--line,#E4DCC8); border-radius:10px; background:var(--cream,#FDF8F0); font-size:12.5px; color:var(--navy,#0C447C); font-weight:600; cursor:pointer; text-align:center; margin-bottom:6px;">&#128206; Upload Excel (.xlsx)</button>
+          <input type="file" id="bcExcelUploadInput" accept=".xlsx" style="display:none;">
+          <div id="bcExcelUploadStatus" style="font-size:11.5px; margin:-2px 0 10px; min-height:14px;"></div>
+
           <div style="font-size:11px; color:#6B7280; margin-bottom:6px;">Sort by:</div>
           <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-bottom:10px;">
             <button type="button" class="bc-sort-btn active" data-sort="fundValue">Fund Value</button>
@@ -5349,6 +5354,112 @@ function addManualBroadcastEmail(){
   updatePickerCount();
   renderPickerList(currentFilteredClients());
 }
+
+// Bulk-adds recipients from an uploaded Excel file with Name + Email
+// columns. Reuses the same parsing tools already loaded for the Dues/
+// Birthday uploads (SheetJS, findColumn's fuzzy header matching,
+// looksLikeHeaderRow's header-row detection) and the exact same
+// "already exists? just select it — otherwise push a lightweight
+// synthetic entry" pattern addManualBroadcastEmail() already uses, so
+// every existing filter/sort/render/selection function works on the
+// result unchanged. No backend call, no Code.gs involved — this only
+// ever touches the in-memory bcAllClients/bcSelectedEmails the picker
+// already keeps client-side.
+async function handleBroadcastExcelUpload(file){
+  const status = el('bcExcelUploadStatus');
+  status.style.color = '#6B7280';
+  status.textContent = 'Reading ' + file.name + '\u2026';
+
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+  try{
+    const buffer = await file.arrayBuffer();
+    const workbook = XLSX.read(buffer, {type:'array'});
+    const ws = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, {header:1, raw:true});
+
+    const signalGroups = [['name'], ['email', 'e-mail']];
+    let headerIdx = -1;
+    for (let i = 0; i < Math.min(rows.length, 10); i++){
+      if (rows[i] && looksLikeHeaderRow(rows[i], signalGroups)){ headerIdx = i; break; }
+    }
+    if (headerIdx === -1){
+      status.style.color = '#EB5757';
+      status.textContent = 'Couldn\u2019t find Name/Email column headers in this file.';
+      return;
+    }
+
+    const headers = rows[headerIdx];
+    const claimed = new Set();
+    const nameCol = findColumn(headers, claimed, ['name', 'full name', 'client name'], ['name']);
+    const emailCol = findColumn(headers, claimed, ['email', 'e-mail', 'email address'], ['email']);
+    if (emailCol === -1){
+      status.style.color = '#EB5757';
+      status.textContent = 'Couldn\u2019t find an Email column in this file.';
+      return;
+    }
+
+    let added = 0, merged = 0, skipped = 0;
+    for (let i = headerIdx + 1; i < rows.length; i++){
+      const row = rows[i];
+      if (!row) continue;
+      const rawEmail = String(row[emailCol] || '').trim().toLowerCase();
+      const rawName = nameCol !== -1 ? String(row[nameCol] || '').trim() : '';
+      if (!rawEmail){ continue; } // blank row — not an error, just nothing to do
+      if (!emailPattern.test(rawEmail)){ skipped++; continue; }
+
+      const existing = bcAllClients.find(c => (c.email || '').trim().toLowerCase() === rawEmail);
+      if (existing){
+        // Merge: this person is already a real client (or was added
+        // earlier) — never overwrite their existing record, just make
+        // sure the upload's intent ("include this person") is honored
+        // by selecting them, same as addManualBroadcastEmail() already
+        // does for a single already-known email.
+        bcSelectedEmails.add(existing.email);
+        merged++;
+      } else {
+        bcAllClients.push({
+          email: rawEmail,
+          clientName: rawName || rawEmail,
+          product: '',
+          fundValue: 0,
+          dueDate: null,
+          policyStatus: '',
+          lapseDate: null,
+          manuallyAdded: true
+        });
+        bcSelectedEmails.add(rawEmail);
+        added++;
+      }
+    }
+
+    el('bcExcelUploadInput').value = ''; // allow re-uploading the same file again later
+    updatePickerCount();
+    renderPickerList(currentFilteredClients());
+
+    if (added === 0 && merged === 0){
+      status.style.color = '#EB5757';
+      status.textContent = skipped > 0
+        ? 'No valid rows found (' + skipped + ' row' + (skipped === 1 ? '' : 's') + ' had an invalid email).'
+        : 'No rows found in this file.';
+    } else {
+      status.style.color = '#27AE60';
+      let msg = '\u2713 ' + added + ' added';
+      if (merged > 0) msg += ', ' + merged + ' matched existing clients';
+      if (skipped > 0) msg += ', ' + skipped + ' skipped (invalid email)';
+      status.textContent = msg + ' \u2014 all selected.';
+    }
+  }catch(err){
+    status.style.color = '#EB5757';
+    status.textContent = 'Could not read this file: ' + (err && err.message ? err.message : String(err));
+  }
+}
+
+el('bcExcelUploadBtn').addEventListener('click', () => el('bcExcelUploadInput').click());
+el('bcExcelUploadInput').addEventListener('change', (e) => {
+  const file = e.target.files && e.target.files[0];
+  if (file) handleBroadcastExcelUpload(file);
+});
 
 el('bcManualEmailAddBtn').addEventListener('click', addManualBroadcastEmail);
 el('bcManualEmailInput').addEventListener('keydown', (e) => {
