@@ -75,7 +75,7 @@
      whether the CDN loads, since it doesn't depend on Tailwind at all. */
   #bcPickerBody { flex-direction:column; }
   #bcPickerResizeHandle { display:flex; }
-  #bcPickerFiltersPanel { border-bottom:1px solid var(--line,#E4DCC8); }
+  #bcPickerFiltersPanel { border-bottom:1px solid var(--line,#E4DCC8); overflow:hidden; }
   @media (min-width:1024px){
     /* Split layout: an even 50/50 divide, filters on the left, client
        list on the right — instead of the filters eating most of the
@@ -85,7 +85,11 @@
     #bcPickerFiltersPanel {
       flex:1 1 50%; width:50%; max-width:50%;
       border-bottom:none; border-right:1px solid var(--line,#E4DCC8);
+      overflow-y:auto; /* desktop still just scrolls — the shrink-to-fit
+                           scaling below is a mobile-only affordance,
+                           since desktop already gets a real 50/50 split */
     }
+    #bcPickerFiltersContent { transform:none !important; }
     #bcPickerList { flex:1 1 50%; width:50%; max-width:50%; }
     #bcPickerResizeHandle { display:none; }
   }
@@ -2712,7 +2716,8 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
         </div>
 
         <div id="bcPickerBody" style="flex:1 1 auto; min-height:0; display:flex; overflow:hidden;">
-        <div id="bcPickerFiltersPanel" style="padding:12px 16px; flex:0 0 auto; background:#fff; overflow-y:auto;">
+        <div id="bcPickerFiltersPanel" style="padding:12px 16px; flex:0 0 auto; background:#fff;">
+          <div id="bcPickerFiltersContent">
           <input type="text" id="bcPickerSearch" placeholder="Search by name..." style="width:100%; padding:10px 14px; border:1px solid var(--line,#E4DCC8); border-radius:10px; background:var(--cream,#FDF8F0); font-size:14px; margin-bottom:10px;">
 
           <div style="font-size:11px; color:#6B7280; margin-bottom:6px;">Not in your client list? Add an email directly:</div>
@@ -2771,6 +2776,7 @@ input:checked + #studioSection .slider-toggle::before{transform:translateX(19px)
             <button type="button" class="bc-quick-btn" id="bcClearSelectionBtn">Clear</button>
           </div>
           <div id="bcSortHint" style="font-size:11px; color:#9CA3AF; margin-top:8px;">Sorted by fund value (highest first) · tap Top N to select the N clients shown below</div>
+          </div>
         </div>
 
         <!-- Mobile-only drag handle: split view isn't possible on a narrow
@@ -5215,15 +5221,29 @@ function renderPickerList(clients){
 (function initPickerResizeHandle(){
   const handle = document.getElementById('bcPickerResizeHandle');
   const panel = document.getElementById('bcPickerFiltersPanel');
+  const content = document.getElementById('bcPickerFiltersContent');
   const body = document.getElementById('bcPickerBody');
-  if (!handle || !panel || !body) return;
+  if (!handle || !panel || !content || !body) return;
 
   let dragging = false;
   let startY = 0;
   let startHeight = 0;
+  let naturalContentHeight = 0; // the content's own full, unscaled height
 
   function pointerY(e){
     return (e.touches && e.touches.length) ? e.touches[0].clientY : e.clientY;
+  }
+
+  // Applies whatever scale keeps the filter controls fully visible at
+  // the panel's current height, instead of clipping/hiding the bottom
+  // of the content the way a plain overflow:hidden would. Never scales
+  // UP past 100% — a tall panel just shows everything at full size with
+  // room to spare, same as before this feature existed.
+  function applyScale(panelHeight){
+    if (naturalContentHeight <= 0) return;
+    const scale = Math.min(1, panelHeight / naturalContentHeight);
+    content.style.transform = 'scale(' + scale + ')';
+    content.style.transformOrigin = 'top center';
   }
 
   function onStart(e){
@@ -5231,9 +5251,18 @@ function renderPickerList(clients){
     dragging = true;
     startY = pointerY(e);
     startHeight = panel.getBoundingClientRect().height;
+
+    // Reset any scale from a previous drag before measuring — otherwise
+    // a content height measured while already shrunk would be wrong,
+    // and re-measuring on every drag (rather than caching once) keeps
+    // this correct even if the person rotates their phone or the
+    // client list's filter options change how tall the content is.
+    content.style.transform = 'none';
+    naturalContentHeight = content.getBoundingClientRect().height;
+
     panel.style.height = startHeight + 'px';
     panel.style.flex = '0 0 auto';
-    panel.style.overflowY = 'auto';
+    applyScale(startHeight);
     document.body.style.userSelect = 'none';
     e.preventDefault();
   }
@@ -5242,14 +5271,16 @@ function renderPickerList(clients){
     if (!dragging) return;
     const dy = pointerY(e) - startY;
     const bodyHeight = body.getBoundingClientRect().height;
-    // Filters panel never shrinks below 100px (always leaves at least
-    // the search bar usable) and never grows so tall that fewer than
-    // 140px remains for the client list below it.
-    const minPanelHeight = 100;
+    // Filters panel never shrinks below 56px (the controls scale down
+    // to fit, so even a sliver still shows a legible, if tiny, search
+    // bar) and never grows so tall that fewer than 140px remains for
+    // the client list below it.
+    const minPanelHeight = 56;
     const maxPanelHeight = Math.max(minPanelHeight, bodyHeight - 140);
     let newHeight = startHeight + dy;
     newHeight = Math.max(minPanelHeight, Math.min(maxPanelHeight, newHeight));
     panel.style.height = newHeight + 'px';
+    applyScale(newHeight);
     e.preventDefault();
   }
 
